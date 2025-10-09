@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { TrendingUp, TrendingDown, Wallet, DollarSign } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Briefcase } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-export default function Dashboard({ userId, dateFilter, customDateFrom, customDateTo }) {
+export default function Dashboard({ userId, dateFilter, customDateFrom, customDateTo, yearStart, monthEnd }) {
   const [incomes, setIncomes] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -36,6 +36,15 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
     if (dateFilter === 'all') return items;
     
     const now = new Date();
+    
+    if (dateFilter === 'year-to-date') {
+      const from = yearStart;
+      const to = monthEnd;
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= from && date <= to;
+      });
+    }
     
     if (dateFilter === 'custom') {
       if (!customDateFrom || !customDateTo) return items;
@@ -99,7 +108,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
@@ -127,6 +136,16 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
               <p className="text-3xl font-bold">{totalExpenses.toLocaleString()} ج.م</p>
             </div>
             <TrendingDown className="w-12 h-12 text-red-200" />
+          </div>
+        </div>
+        
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-indigo-100 text-sm mb-1">إجمالي الأرصدة</p>
+              <p className="text-3xl font-bold">{totalAccounts.toLocaleString()} ج.م</p>
+            </div>
+            <Briefcase className="w-12 h-12 text-indigo-200" />
           </div>
         </div>
         
