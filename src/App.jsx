@@ -6,15 +6,21 @@ import Dashboard from './components/Dashboard';
 import IncomeTab from './components/IncomeTab';
 import ExpensesTab from './components/ExpensesTab';
 import AccountsTab from './components/AccountsTab';
-import { Wallet, LogOut, FileText, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
+import AccountTab from './components/AccountTab';
+import { Wallet, LogOut, FileText, TrendingUp, TrendingDown, Calendar, User } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [dateFilter, setDateFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('year-to-date');
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
+
+  // Calculate year-to-date dates
+  const today = new Date();
+  const yearStart = new Date(today.getFullYear(), 0, 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -52,7 +58,7 @@ function App() {
               <Wallet className="w-10 h-10" />
               Fox Finance
             </h1>
-            <p className="text-emerald-100 mt-1">مرحباً {user.email}</p>
+            <p className="text-emerald-100 mt-1">مرحباً {user.displayName || user.email}</p>
           </div>
           <button
             onClick={handleSignOut}
@@ -74,6 +80,7 @@ function App() {
               onChange={(e) => setDateFilter(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
             >
+              <option value="year-to-date">من بداية السنة لنهاية الشهر الحالي</option>
               <option value="all">كل الفترات</option>
               <option value="week">آخر أسبوع</option>
               <option value="month">آخر شهر</option>
@@ -109,7 +116,8 @@ function App() {
               { id: 'dashboard', label: 'لوحة التحكم', icon: FileText },
               { id: 'income', label: 'الدخل', icon: TrendingUp },
               { id: 'expenses', label: 'المصروفات', icon: TrendingDown },
-              { id: 'accounts', label: 'الحسابات', icon: Wallet }
+              { id: 'accounts', label: 'الحسابات', icon: Wallet },
+              { id: 'account', label: 'حسابي', icon: User }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -135,6 +143,8 @@ function App() {
             dateFilter={dateFilter}
             customDateFrom={customDateFrom}
             customDateTo={customDateTo}
+            yearStart={yearStart}
+            monthEnd={monthEnd}
           />
         )}
         {activeTab === 'income' && (
@@ -143,6 +153,8 @@ function App() {
             dateFilter={dateFilter}
             customDateFrom={customDateFrom}
             customDateTo={customDateTo}
+            yearStart={yearStart}
+            monthEnd={monthEnd}
           />
         )}
         {activeTab === 'expenses' && (
@@ -151,9 +163,12 @@ function App() {
             dateFilter={dateFilter}
             customDateFrom={customDateFrom}
             customDateTo={customDateTo}
+            yearStart={yearStart}
+            monthEnd={monthEnd}
           />
         )}
         {activeTab === 'accounts' && <AccountsTab userId={user.uid} />}
+        {activeTab === 'account' && <AccountTab user={user} />}
       </div>
     </div>
   );
