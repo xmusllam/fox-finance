@@ -95,8 +95,9 @@ export default function AccountsTab({ userId }) {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg"
             >
               <option value="بنك">حساب بنكي</option>
-              <option value="نقدي">نقدي</option>
               <option value="محفظة إلكترونية">محفظة إلكترونية</option>
+              <option value="نقدي">نقدي</option>
+              <option value="سلفة لصديق">سلفة لصديق</option>
               <option value="استثمار">استثمار</option>
               <option value="مدخرات">مدخرات</option>
               <option value="كريدت كارد">كريدت كارد</option>
