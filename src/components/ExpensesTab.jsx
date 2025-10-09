@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PlusCircle, Trash2, Edit2, X, Check } from 'lucide-react';
+import { PlusCircle, Trash2, Edit2, X, Check, ChevronDown, ChevronUp, TrendingDown } from 'lucide-react';
 
 export default function ExpensesTab({ userId, dateFilter, customDateFrom, customDateTo, yearStart, monthEnd }) {
   const [expenses, setExpenses] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState(['إيجار', 'فواتير', 'أقساط', 'طعام', 'مواصلات', 'ترفيه', 'صحة', 'مصروفات عامة']);
   const [categoriesDocId, setCategoriesDocId] = useState(null);
+  const [expandedCategories, setExpandedCategories] = useState({});
   const [newExpense, setNewExpense] = useState({
     name: '',
     amount: '',
     date: '',
     category: 'مصروفات عامة',
+    accountId: '',
     recurring: false,
     months: 1
   });
@@ -26,6 +29,11 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     const expensesQuery = query(collection(db, 'expenses'), where('userId', '==', userId));
     const unsubExpenses = onSnapshot(expensesQuery, (snapshot) => {
       setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId));
+    const unsubAccounts = onSnapshot(accountsQuery, (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     const categoriesQuery = query(
@@ -43,6 +51,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
 
     return () => {
       unsubExpenses();
+      unsubAccounts();
       unsubCategories();
     };
   }, [userId]);
@@ -95,14 +104,30 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
         amount: parseFloat(newExpense.amount),
         date: itemDate.toISOString().split('T')[0],
         category: newExpense.category,
+        accountId: newExpense.accountId,
         recurring: newExpense.recurring,
         userId
       });
+
+      if (newExpense.accountId) {
+        const account = accounts.find(a => a.id === newExpense.accountId);
+        if (account) {
+          if (account.isCredit) {
+            await updateDoc(doc(db, 'accounts', newExpense.accountId), {
+              balance: (account.balance || 0) - parseFloat(newExpense.amount)
+            });
+          } else {
+            await updateDoc(doc(db, 'accounts', newExpense.accountId), {
+              balance: (account.balance || 0) - parseFloat(newExpense.amount)
+            });
+          }
+        }
+      }
     }
   };
 
   const handleAddExpense = async () => {
-    if (!newExpense.name || !newExpense.amount || !newExpense.date) {
+    if (!newExpense.name || !newExpense.amount || !newExpense.date || !newExpense.accountId) {
       alert('يرجى ملء جميع الحقول');
       return;
     }
@@ -113,15 +138,31 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
       amount: '',
       date: '',
       category: 'مصروفات عامة',
+      accountId: '',
       recurring: false,
       months: 1
     });
   };
 
-  const handleDeleteExpense = async (id) => {
-    if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-      await deleteDoc(doc(db, 'expenses', id));
+  const handleDeleteExpense = async (expense) => {
+    if (!confirm('هل أنت متأكد من حذف هذا المصروف؟')) return;
+
+    if (expense.accountId) {
+      const account = accounts.find(a => a.id === expense.accountId);
+      if (account) {
+        if (account.isCredit) {
+          await updateDoc(doc(db, 'accounts', expense.accountId), {
+            balance: (account.balance || 0) + expense.amount
+          });
+        } else {
+          await updateDoc(doc(db, 'accounts', expense.accountId), {
+            balance: (account.balance || 0) + expense.amount
+          });
+        }
+      }
     }
+
+    await deleteDoc(doc(db, 'expenses', expense.id));
   };
 
   const handleAddCategory = async () => {
@@ -180,7 +221,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     const count = snapshot.size;
 
     if (count > 0) {
-      const action = confirm(`يوجد ${count} معاملة بفئة "${categoryName}".\n\nاختر:\n- OK: تحويلها لفئة "أخرى"\n- Cancel: إلغاء الحذف`);
+      const action = confirm(`يوجد ${count} معاملة بفئة "${categoryName}".\n\nاختر:\n- OK: تحويلها لفئة "مصروفات عامة"\n- Cancel: إلغاء الحذف`);
       
       if (!action) return;
 
@@ -202,21 +243,54 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
       name: expense.name,
       amount: expense.amount,
       date: expense.date,
-      category: expense.category
+      category: expense.category,
+      accountId: expense.accountId || ''
     });
   };
 
-  const handleSaveEdit = async (id) => {
-    if (!editExpenseData.name || !editExpenseData.amount || !editExpenseData.date) {
+  const handleSaveEdit = async (expense) => {
+    if (!editExpenseData.name || !editExpenseData.amount || !editExpenseData.date || !editExpenseData.accountId) {
       alert('يرجى ملء جميع الحقول');
       return;
     }
 
-    await updateDoc(doc(db, 'expenses', id), {
+    const oldAmount = expense.amount;
+    const newAmount = parseFloat(editExpenseData.amount);
+    const diff = newAmount - oldAmount;
+
+    if (expense.accountId === editExpenseData.accountId && diff !== 0) {
+      const account = accounts.find(a => a.id === expense.accountId);
+      if (account) {
+        await updateDoc(doc(db, 'accounts', expense.accountId), {
+          balance: (account.balance || 0) - diff
+        });
+      }
+    } else if (expense.accountId !== editExpenseData.accountId) {
+      if (expense.accountId) {
+        const oldAccount = accounts.find(a => a.id === expense.accountId);
+        if (oldAccount) {
+          await updateDoc(doc(db, 'accounts', expense.accountId), {
+            balance: (oldAccount.balance || 0) + oldAmount
+          });
+        }
+      }
+
+      if (editExpenseData.accountId) {
+        const newAccount = accounts.find(a => a.id === editExpenseData.accountId);
+        if (newAccount) {
+          await updateDoc(doc(db, 'accounts', editExpenseData.accountId), {
+            balance: (newAccount.balance || 0) - newAmount
+          });
+        }
+      }
+    }
+
+    await updateDoc(doc(db, 'expenses', expense.id), {
       name: editExpenseData.name,
-      amount: parseFloat(editExpenseData.amount),
+      amount: newAmount,
       date: editExpenseData.date,
-      category: editExpenseData.category
+      category: editExpenseData.category,
+      accountId: editExpenseData.accountId
     });
 
     setEditingExpense(null);
@@ -224,9 +298,39 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
   };
 
   const filteredExpenses = filterByDate(expenses);
+  const totalExpenses = filteredExpenses.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+  const groupedExpenses = categories.map(category => {
+    const categoryExpenses = filteredExpenses.filter(exp => exp.category === category);
+    const total = categoryExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    return {
+      category,
+      expenses: categoryExpenses,
+      total,
+      count: categoryExpenses.length
+    };
+  }).filter(group => group.count > 0);
+
+  const toggleCategory = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
 
   return (
     <div className="space-y-6">
+      <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-lg p-8 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-red-100 text-lg mb-2">إجمالي المصروفات</p>
+            <p className="text-5xl font-bold">{totalExpenses.toLocaleString()} ج.م</p>
+            <p className="text-red-100 mt-2">عدد المعاملات: {filteredExpenses.length}</p>
+          </div>
+          <TrendingDown className="w-20 h-20 text-red-200" />
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-800">إضافة مصروف جديد</h3>
@@ -316,7 +420,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-gray-700 font-semibold mb-2">اسم المصروف</label>
             <input
@@ -363,6 +467,22 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
           </div>
 
           <div>
+            <label className="block text-gray-700 font-semibold mb-2">دفعت من</label>
+            <select
+              value={newExpense.accountId}
+              onChange={(e) => setNewExpense({ ...newExpense, accountId: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+            >
+              <option value="">اختر الحساب</option>
+              {accounts.map(acc => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.name} ({acc.isCredit ? 'كريدت كارد' : acc.type})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-gray-700 font-semibold mb-2">تكرار شهري؟</label>
             <div className="flex items-center gap-4 h-12">
               <label className="flex items-center gap-2">
@@ -388,7 +508,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
             </div>
           </div>
 
-          <div className="flex items-end">
+          <div className="flex items-end lg:col-span-2">
             <button
               onClick={handleAddExpense}
               className="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
@@ -402,117 +522,125 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
 
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <h3 className="text-2xl font-bold text-gray-800 mb-6">قائمة المصروفات</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-red-50">
-              <tr>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">المصروف</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">الفئة</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">المبلغ</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">التاريخ</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredExpenses.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                    لا توجد بيانات. قم بإضافة مصروف جديد!
-                  </td>
-                </tr>
-              ) : (
-                filteredExpenses.map(expense => (
-                  <tr key={expense.id} className="border-b hover:bg-gray-50">
-                    {editingExpense === expense.id ? (
-                      <>
-                        <td className="px-6 py-4">
-                          <input
-                            type="text"
-                            value={editExpenseData.name}
-                            onChange={(e) => setEditExpenseData({ ...editExpenseData, name: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <select
-                            value={editExpenseData.category}
-                            onChange={(e) => setEditExpenseData({ ...editExpenseData, category: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          >
-                            {categories.map(cat => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-6 py-4">
-                          <input
-                            type="number"
-                            value={editExpenseData.amount}
-                            onChange={(e) => setEditExpenseData({ ...editExpenseData, amount: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <input
-                            type="date"
-                            value={editExpenseData.date}
-                            onChange={(e) => setEditExpenseData({ ...editExpenseData, date: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleSaveEdit(expense.id)}
-                              className="text-green-600 hover:text-green-800"
-                            >
-                              <Check className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => setEditingExpense(null)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
+        
+        {groupedExpenses.length === 0 ? (
+          <div className="text-center text-gray-500 py-12">
+            لا توجد بيانات. قم بإضافة مصروف جديد!
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {groupedExpenses.map(group => (
+              <div key={group.category} className="border-2 border-red-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => toggleCategory(group.category)}
+                  className="w-full bg-red-50 hover:bg-red-100 p-4 flex items-center justify-between transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    {expandedCategories[group.category] ? (
+                      <ChevronUp className="w-5 h-5 text-red-600" />
                     ) : (
-                      <>
-                        <td className="px-6 py-4 text-gray-800 font-medium">{expense.name}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
-                            {expense.category}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-red-600 font-bold">
-                          {expense.amount?.toLocaleString()} ج.م
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{expense.date}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEditExpense(expense)}
-                              className="text-blue-600 hover:text-blue-800"
-                            >
-                              <Edit2 className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteExpense(expense.id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
+                      <ChevronDown className="w-5 h-5 text-red-600" />
                     )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    <span className="font-bold text-lg text-gray-800">{group.category}</span>
+                    <span className="text-sm text-gray-600">({group.count} معاملة)</span>
+                  </div>
+                  <span className="font-bold text-red-600 text-lg">{group.total.toLocaleString()} ج.م</span>
+                </button>
+
+                {expandedCategories[group.category] && (
+                  <div className="p-4 bg-white">
+                    <div className="space-y-2">
+                      {group.expenses.map(expense => {
+                        const account = accounts.find(a => a.id === expense.accountId);
+                        
+                        return editingExpense === expense.id ? (
+                          <div key={expense.id} className="grid grid-cols-6 gap-2 p-3 bg-gray-50 rounded-lg">
+                            <input
+                              type="text"
+                              value={editExpenseData.name}
+                              onChange={(e) => setEditExpenseData({ ...editExpenseData, name: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                              placeholder="الاسم"
+                            />
+                            <input
+                              type="number"
+                              value={editExpenseData.amount}
+                              onChange={(e) => setEditExpenseData({ ...editExpenseData, amount: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                              placeholder="المبلغ"
+                            />
+                            <input
+                              type="date"
+                              value={editExpenseData.date}
+                              onChange={(e) => setEditExpenseData({ ...editExpenseData, date: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                            />
+                            <select
+                              value={editExpenseData.category}
+                              onChange={(e) => setEditExpenseData({ ...editExpenseData, category: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                            >
+                              {categories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={editExpenseData.accountId}
+                              onChange={(e) => setEditExpenseData({ ...editExpenseData, accountId: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                            >
+                              {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                              ))}
+                            </select>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleSaveEdit(expense)}
+                                className="flex-1 text-green-600 hover:text-green-800"
+                              >
+                                <Check className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => setEditingExpense(null)}
+                                className="flex-1 text-red-600 hover:text-red-800"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={expense.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-800">{expense.name}</p>
+                              <p className="text-sm text-gray-600">{expense.date} • {account?.name || 'غير محدد'}</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="font-bold text-red-600">{expense.amount.toLocaleString()} ج.م</span>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditExpense(expense)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  <Edit2 className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteExpense(expense)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
