@@ -135,8 +135,8 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             <TrendingUp className="w-12 h-12 text-emerald-200" />
           </div>
         </button>
-        
-        <button
+
+<button
           onClick={() => onNavigate('expenses')}
           className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
         >
@@ -158,7 +158,6 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             <Wallet className="w-12 h-12 text-blue-200" />
           </div>
         </div>
-      </div>
         
         <button
           onClick={() => onNavigate('accounts')}
@@ -195,7 +194,8 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             <DollarSign className="w-12 h-12 text-purple-200" />
           </div>
         </div>
-
+      </div>
+        
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h3 className="text-xl font-bold text-gray-800 mb-6">فئات الدخل</h3>
