@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PlusCircle, Trash2, Edit2, X, Check } from 'lucide-react';
+import { PlusCircle, Trash2, Edit2, X, Check, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 
 export default function IncomeTab({ userId, dateFilter, customDateFrom, customDateTo, yearStart, monthEnd }) {
   const [incomes, setIncomes] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState(['راتب', 'أرباح', 'استثمار', 'هدية', 'أخرى']);
   const [categoriesDocId, setCategoriesDocId] = useState(null);
+  const [expandedCategories, setExpandedCategories] = useState({});
   const [newIncome, setNewIncome] = useState({
     name: '',
     amount: '',
     date: '',
     category: 'راتب',
+    accountId: '',
     recurring: false,
     months: 1
   });
@@ -26,6 +29,11 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     const incomesQuery = query(collection(db, 'incomes'), where('userId', '==', userId));
     const unsubIncomes = onSnapshot(incomesQuery, (snapshot) => {
       setIncomes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId));
+    const unsubAccounts = onSnapshot(accountsQuery, (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     const categoriesQuery = query(
@@ -43,6 +51,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
 
     return () => {
       unsubIncomes();
+      unsubAccounts();
       unsubCategories();
     };
   }, [userId]);
@@ -95,14 +104,25 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
         amount: parseFloat(newIncome.amount),
         date: itemDate.toISOString().split('T')[0],
         category: newIncome.category,
+        accountId: newIncome.accountId,
         recurring: newIncome.recurring,
         userId
       });
+
+      if (newIncome.accountId) {
+        const accountRef = doc(db, 'accounts', newIncome.accountId);
+        const account = accounts.find(a => a.id === newIncome.accountId);
+        if (account) {
+          await updateDoc(accountRef, {
+            balance: (account.balance || 0) + parseFloat(newIncome.amount)
+          });
+        }
+      }
     }
   };
 
   const handleAddIncome = async () => {
-    if (!newIncome.name || !newIncome.amount || !newIncome.date) {
+    if (!newIncome.name || !newIncome.amount || !newIncome.date || !newIncome.accountId) {
       alert('يرجى ملء جميع الحقول');
       return;
     }
@@ -113,15 +133,25 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
       amount: '',
       date: '',
       category: 'راتب',
+      accountId: '',
       recurring: false,
       months: 1
     });
   };
 
-  const handleDeleteIncome = async (id) => {
-    if (confirm('هل أنت متأكد من حذف هذا الدخل؟')) {
-      await deleteDoc(doc(db, 'incomes', id));
+  const handleDeleteIncome = async (income) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الدخل؟')) return;
+
+    if (income.accountId) {
+      const account = accounts.find(a => a.id === income.accountId);
+      if (account) {
+        await updateDoc(doc(db, 'accounts', income.accountId), {
+          balance: (account.balance || 0) - income.amount
+        });
+      }
     }
+
+    await deleteDoc(doc(db, 'incomes', income.id));
   };
 
   const handleAddCategory = async () => {
@@ -202,21 +232,54 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
       name: income.name,
       amount: income.amount,
       date: income.date,
-      category: income.category
+      category: income.category,
+      accountId: income.accountId || ''
     });
   };
 
-  const handleSaveEdit = async (id) => {
-    if (!editIncomeData.name || !editIncomeData.amount || !editIncomeData.date) {
+  const handleSaveEdit = async (income) => {
+    if (!editIncomeData.name || !editIncomeData.amount || !editIncomeData.date || !editIncomeData.accountId) {
       alert('يرجى ملء جميع الحقول');
       return;
     }
 
-    await updateDoc(doc(db, 'incomes', id), {
+    const oldAmount = income.amount;
+    const newAmount = parseFloat(editIncomeData.amount);
+    const diff = newAmount - oldAmount;
+
+    if (income.accountId === editIncomeData.accountId && diff !== 0) {
+      const account = accounts.find(a => a.id === income.accountId);
+      if (account) {
+        await updateDoc(doc(db, 'accounts', income.accountId), {
+          balance: (account.balance || 0) + diff
+        });
+      }
+    } else if (income.accountId !== editIncomeData.accountId) {
+      if (income.accountId) {
+        const oldAccount = accounts.find(a => a.id === income.accountId);
+        if (oldAccount) {
+          await updateDoc(doc(db, 'accounts', income.accountId), {
+            balance: (oldAccount.balance || 0) - oldAmount
+          });
+        }
+      }
+
+      if (editIncomeData.accountId) {
+        const newAccount = accounts.find(a => a.id === editIncomeData.accountId);
+        if (newAccount) {
+          await updateDoc(doc(db, 'accounts', editIncomeData.accountId), {
+            balance: (newAccount.balance || 0) + newAmount
+          });
+        }
+      }
+    }
+
+    await updateDoc(doc(db, 'incomes', income.id), {
       name: editIncomeData.name,
-      amount: parseFloat(editIncomeData.amount),
+      amount: newAmount,
       date: editIncomeData.date,
-      category: editIncomeData.category
+      category: editIncomeData.category,
+      accountId: editIncomeData.accountId
     });
 
     setEditingIncome(null);
@@ -224,9 +287,41 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
   };
 
   const filteredIncomes = filterByDate(incomes);
+  const totalIncome = filteredIncomes.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+  const groupedIncomes = categories.map(category => {
+    const categoryIncomes = filteredIncomes.filter(inc => inc.category === category);
+    const total = categoryIncomes.reduce((sum, inc) => sum + inc.amount, 0);
+    return {
+      category,
+      incomes: categoryIncomes,
+      total,
+      count: categoryIncomes.length
+    };
+  }).filter(group => group.count > 0);
+
+  const toggleCategory = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
+  const regularAccounts = accounts.filter(acc => !acc.isCredit);
 
   return (
     <div className="space-y-6">
+      <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-8 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-emerald-100 text-lg mb-2">إجمالي الدخل</p>
+            <p className="text-5xl font-bold">{totalIncome.toLocaleString()} ج.م</p>
+            <p className="text-emerald-100 mt-2">عدد المعاملات: {filteredIncomes.length}</p>
+          </div>
+          <TrendingUp className="w-20 h-20 text-emerald-200" />
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-800">إضافة دخل جديد</h3>
@@ -316,7 +411,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-gray-700 font-semibold mb-2">اسم مصدر الدخل</label>
             <input
@@ -363,6 +458,20 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
           </div>
 
           <div>
+            <label className="block text-gray-700 font-semibold mb-2">الحساب</label>
+            <select
+              value={newIncome.accountId}
+              onChange={(e) => setNewIncome({ ...newIncome, accountId: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+            >
+              <option value="">اختر الحساب</option>
+              {regularAccounts.map(acc => (
+                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-gray-700 font-semibold mb-2">تكرار شهري؟</label>
             <div className="flex items-center gap-4 h-12">
               <label className="flex items-center gap-2">
@@ -388,7 +497,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
             </div>
           </div>
 
-          <div className="flex items-end">
+          <div className="flex items-end lg:col-span-2">
             <button
               onClick={handleAddIncome}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
@@ -402,117 +511,125 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
 
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <h3 className="text-2xl font-bold text-gray-800 mb-6">قائمة الدخل</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-emerald-50">
-              <tr>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">المصدر</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">الفئة</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">المبلغ</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">التاريخ</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredIncomes.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                    لا توجد بيانات. قم بإضافة دخل جديد!
-                  </td>
-                </tr>
-              ) : (
-                filteredIncomes.map(income => (
-                  <tr key={income.id} className="border-b hover:bg-gray-50">
-                    {editingIncome === income.id ? (
-                      <>
-                        <td className="px-6 py-4">
-                          <input
-                            type="text"
-                            value={editIncomeData.name}
-                            onChange={(e) => setEditIncomeData({ ...editIncomeData, name: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <select
-                            value={editIncomeData.category}
-                            onChange={(e) => setEditIncomeData({ ...editIncomeData, category: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          >
-                            {categories.map(cat => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-6 py-4">
-                          <input
-                            type="number"
-                            value={editIncomeData.amount}
-                            onChange={(e) => setEditIncomeData({ ...editIncomeData, amount: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <input
-                            type="date"
-                            value={editIncomeData.date}
-                            onChange={(e) => setEditIncomeData({ ...editIncomeData, date: e.target.value })}
-                            className="w-full px-2 py-1 border rounded"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleSaveEdit(income.id)}
-                              className="text-green-600 hover:text-green-800"
-                            >
-                              <Check className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => setEditingIncome(null)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
+        
+        {groupedIncomes.length === 0 ? (
+          <div className="text-center text-gray-500 py-12">
+            لا توجد بيانات. قم بإضافة دخل جديد!
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {groupedIncomes.map(group => (
+              <div key={group.category} className="border-2 border-emerald-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => toggleCategory(group.category)}
+                  className="w-full bg-emerald-50 hover:bg-emerald-100 p-4 flex items-center justify-between transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    {expandedCategories[group.category] ? (
+                      <ChevronUp className="w-5 h-5 text-emerald-600" />
                     ) : (
-                      <>
-                        <td className="px-6 py-4 text-gray-800 font-medium">{income.name}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
-                            {income.category}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-emerald-600 font-bold">
-                          {income.amount?.toLocaleString()} ج.م
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{income.date}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEditIncome(income)}
-                              className="text-blue-600 hover:text-blue-800"
-                            >
-                              <Edit2 className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteIncome(income.id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
+                      <ChevronDown className="w-5 h-5 text-emerald-600" />
                     )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    <span className="font-bold text-lg text-gray-800">{group.category}</span>
+                    <span className="text-sm text-gray-600">({group.count} معاملة)</span>
+                  </div>
+                  <span className="font-bold text-emerald-600 text-lg">{group.total.toLocaleString()} ج.م</span>
+                </button>
+
+                {expandedCategories[group.category] && (
+                  <div className="p-4 bg-white">
+                    <div className="space-y-2">
+                      {group.incomes.map(income => {
+                        const account = accounts.find(a => a.id === income.accountId);
+                        
+                        return editingIncome === income.id ? (
+                          <div key={income.id} className="grid grid-cols-6 gap-2 p-3 bg-gray-50 rounded-lg">
+                            <input
+                              type="text"
+                              value={editIncomeData.name}
+                              onChange={(e) => setEditIncomeData({ ...editIncomeData, name: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                              placeholder="الاسم"
+                            />
+                            <input
+                              type="number"
+                              value={editIncomeData.amount}
+                              onChange={(e) => setEditIncomeData({ ...editIncomeData, amount: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                              placeholder="المبلغ"
+                            />
+                            <input
+                              type="date"
+                              value={editIncomeData.date}
+                              onChange={(e) => setEditIncomeData({ ...editIncomeData, date: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                            />
+                            <select
+                              value={editIncomeData.category}
+                              onChange={(e) => setEditIncomeData({ ...editIncomeData, category: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                            >
+                              {categories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={editIncomeData.accountId}
+                              onChange={(e) => setEditIncomeData({ ...editIncomeData, accountId: e.target.value })}
+                              className="px-2 py-1 border rounded"
+                            >
+                              {regularAccounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                              ))}
+                            </select>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleSaveEdit(income)}
+                                className="flex-1 text-green-600 hover:text-green-800"
+                              >
+                                <Check className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => setEditingIncome(null)}
+                                className="flex-1 text-red-600 hover:text-red-800"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={income.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-800">{income.name}</p>
+                              <p className="text-sm text-gray-600">{income.date} • {account?.name || 'غير محدد'}</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="font-bold text-emerald-600">{income.amount.toLocaleString()} ج.م</span>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditIncome(income)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  <Edit2 className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteIncome(income)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
