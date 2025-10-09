@@ -7,7 +7,8 @@ import IncomeTab from './components/IncomeTab';
 import ExpensesTab from './components/ExpensesTab';
 import AccountsTab from './components/AccountsTab';
 import AccountTab from './components/AccountTab';
-import { Wallet, LogOut, FileText, TrendingUp, TrendingDown, Calendar, User } from 'lucide-react';
+import TransfersTab from './components/TransfersTab';
+import { Wallet, LogOut, FileText, TrendingUp, TrendingDown, Calendar, User, ArrowRightLeft } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -117,6 +118,7 @@ function App() {
               { id: 'income', label: 'الدخل', icon: TrendingUp },
               { id: 'expenses', label: 'المصروفات', icon: TrendingDown },
               { id: 'accounts', label: 'الحسابات', icon: Wallet },
+              { id: 'transfers', label: 'التحويلات', icon: ArrowRightLeft },
               { id: 'account', label: 'حسابي', icon: User }
             ].map(tab => (
               <button
@@ -170,6 +172,7 @@ function App() {
         )}
         {activeTab === 'accounts' && <AccountsTab userId={user.uid} />}
         {activeTab === 'account' && <AccountTab user={user} />}
+        {activeTab === 'transfers' && <TransfersTab userId={user.uid} />}
       </div>
     </div>
   );
