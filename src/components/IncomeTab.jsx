@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PlusCircle, Trash2, Edit2 } from 'lucide-react';
+import { PlusCircle, Trash2, Edit2, X, Check } from 'lucide-react';
 
-export default function IncomeTab({ userId, dateFilter, customDateFrom, customDateTo }) {
+export default function IncomeTab({ userId, dateFilter, customDateFrom, customDateTo, yearStart, monthEnd }) {
   const [incomes, setIncomes] = useState([]);
   const [categories, setCategories] = useState(['راتب', 'أرباح', 'استثمار', 'هدية', 'أخرى']);
+  const [categoriesDocId, setCategoriesDocId] = useState(null);
   const [newIncome, setNewIncome] = useState({
     name: '',
     amount: '',
@@ -14,8 +15,12 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     recurring: false,
     months: 1
   });
-  const [newCategory, setNewCategory] = useState('');
-  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [editCategoryValue, setEditCategoryValue] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingIncome, setEditingIncome] = useState(null);
+  const [editIncomeData, setEditIncomeData] = useState({});
 
   useEffect(() => {
     const incomesQuery = query(collection(db, 'incomes'), where('userId', '==', userId));
@@ -30,7 +35,9 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     );
     const unsubCategories = onSnapshot(categoriesQuery, (snapshot) => {
       if (!snapshot.empty) {
-        setCategories(snapshot.docs[0].data().categories);
+        const docData = snapshot.docs[0];
+        setCategories(docData.data().categories);
+        setCategoriesDocId(docData.id);
       }
     });
 
@@ -44,6 +51,15 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     if (dateFilter === 'all') return items;
     
     const now = new Date();
+    
+    if (dateFilter === 'year-to-date') {
+      const from = yearStart;
+      const to = monthEnd;
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= from && date <= to;
+      });
+    }
     
     if (dateFilter === 'custom') {
       if (!customDateFrom || !customDateTo) return items;
@@ -109,23 +125,15 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
   };
 
   const handleAddCategory = async () => {
-    if (!newCategory || categories.includes(newCategory)) {
+    if (!newCategoryName || categories.includes(newCategoryName)) {
       alert('الفئة موجودة بالفعل أو فارغة');
       return;
     }
 
-    const newCategories = [...categories, newCategory];
+    const newCategories = [...categories, newCategoryName];
     
-    const categoriesQuery = query(
-      collection(db, 'categories'),
-      where('userId', '==', userId),
-      where('type', '==', 'income')
-    );
-    
-    const snapshot = await categoriesQuery.get();
-    
-    if (!snapshot.empty) {
-      await updateDoc(doc(db, 'categories', snapshot.docs[0].id), {
+    if (categoriesDocId) {
+      await updateDoc(doc(db, 'categories', categoriesDocId), {
         categories: newCategories
       });
     } else {
@@ -136,8 +144,83 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
       });
     }
 
-    setNewCategory('');
-    setShowAddCategory(false);
+    setNewCategoryName('');
+  };
+
+  const handleEditCategory = async (oldName) => {
+    if (!editCategoryValue || editCategoryValue === oldName) {
+      setEditingCategory(null);
+      return;
+    }
+
+    if (categories.includes(editCategoryValue)) {
+      alert('هذا الاسم مستخدم بالفعل');
+      return;
+    }
+
+    const newCategories = categories.map(cat => cat === oldName ? editCategoryValue : cat);
+    
+    if (categoriesDocId) {
+      await updateDoc(doc(db, 'categories', categoriesDocId), {
+        categories: newCategories
+      });
+    }
+
+    const incomesQuery = query(collection(db, 'incomes'), where('userId', '==', userId), where('category', '==', oldName));
+    const snapshot = await getDocs(incomesQuery);
+    await Promise.all(snapshot.docs.map(d => updateDoc(doc(db, 'incomes', d.id), { category: editCategoryValue })));
+
+    setEditingCategory(null);
+    setEditCategoryValue('');
+  };
+
+  const handleDeleteCategory = async (categoryName) => {
+    const incomesQuery = query(collection(db, 'incomes'), where('userId', '==', userId), where('category', '==', categoryName));
+    const snapshot = await getDocs(incomesQuery);
+    const count = snapshot.size;
+
+    if (count > 0) {
+      const action = confirm(`يوجد ${count} معاملة بفئة "${categoryName}".\n\nاختر:\n- OK: تحويلها لفئة "أخرى"\n- Cancel: إلغاء الحذف`);
+      
+      if (!action) return;
+
+      await Promise.all(snapshot.docs.map(d => updateDoc(doc(db, 'incomes', d.id), { category: 'أخرى' })));
+    }
+
+    const newCategories = categories.filter(cat => cat !== categoryName);
+    
+    if (categoriesDocId) {
+      await updateDoc(doc(db, 'categories', categoriesDocId), {
+        categories: newCategories
+      });
+    }
+  };
+
+  const handleEditIncome = (income) => {
+    setEditingIncome(income.id);
+    setEditIncomeData({
+      name: income.name,
+      amount: income.amount,
+      date: income.date,
+      category: income.category
+    });
+  };
+
+  const handleSaveEdit = async (id) => {
+    if (!editIncomeData.name || !editIncomeData.amount || !editIncomeData.date) {
+      alert('يرجى ملء جميع الحقول');
+      return;
+    }
+
+    await updateDoc(doc(db, 'incomes', id), {
+      name: editIncomeData.name,
+      amount: parseFloat(editIncomeData.amount),
+      date: editIncomeData.date,
+      category: editIncomeData.category
+    });
+
+    setEditingIncome(null);
+    setEditIncomeData({});
   };
 
   const filteredIncomes = filterByDate(incomes);
@@ -148,7 +231,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-800">إضافة دخل جديد</h3>
           <button
-            onClick={() => setShowAddCategory(!showAddCategory)}
+            onClick={() => setShowCategoryManager(!showCategoryManager)}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200"
           >
             <Edit2 className="w-4 h-4" />
@@ -156,23 +239,79 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
           </button>
         </div>
 
-        {showAddCategory && (
-          <div className="mb-4 p-4 bg-emerald-50 rounded-xl">
-            <label className="block text-gray-700 font-semibold mb-2">إضافة فئة جديدة</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                placeholder="اسم الفئة الجديدة"
-              />
-              <button
-                onClick={handleAddCategory}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-              >
-                إضافة
-              </button>
+        {showCategoryManager && (
+          <div className="mb-6 p-6 bg-emerald-50 rounded-xl border-2 border-emerald-200">
+            <h4 className="font-bold text-emerald-800 mb-4 text-lg">إدارة فئات الدخل</h4>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 font-semibold mb-2">إضافة فئة جديدة</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg"
+                  placeholder="اسم الفئة الجديدة"
+                />
+                <button
+                  onClick={handleAddCategory}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-3">الفئات الحالية</label>
+              <div className="flex flex-wrap gap-2">
+                {categories.map(cat => (
+                  <div key={cat} className="flex items-center gap-2 bg-white border-2 border-emerald-300 rounded-lg p-2">
+                    {editingCategory === cat ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editCategoryValue}
+                          onChange={(e) => setEditCategoryValue(e.target.value)}
+                          className="px-2 py-1 border border-emerald-400 rounded w-32"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleEditCategory(cat)}
+                          className="text-green-600 hover:text-green-800"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingCategory(null)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-gray-700">{cat}</span>
+                        <button
+                          onClick={() => {
+                            setEditingCategory(cat);
+                            setEditCategoryValue(cat);
+                          }}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(cat)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -184,7 +323,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
               type="text"
               value={newIncome.name}
               onChange={(e) => setNewIncome({ ...newIncome, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               placeholder="مثال: راتب شهري"
             />
           </div>
@@ -195,7 +334,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
               type="number"
               value={newIncome.amount}
               onChange={(e) => setNewIncome({ ...newIncome, amount: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               placeholder="0"
             />
           </div>
@@ -206,7 +345,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
               type="date"
               value={newIncome.date}
               onChange={(e) => setNewIncome({ ...newIncome, date: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
             />
           </div>
 
@@ -215,7 +354,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
             <select
               value={newIncome.category}
               onChange={(e) => setNewIncome({ ...newIncome, category: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
             >
               {categories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
@@ -231,7 +370,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
                   type="checkbox"
                   checked={newIncome.recurring}
                   onChange={(e) => setNewIncome({ ...newIncome, recurring: e.target.checked })}
-                  className="w-5 h-5 text-emerald-600"
+                  className="w-5 h-5"
                 />
                 <span>نعم</span>
               </label>
@@ -284,24 +423,90 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
               ) : (
                 filteredIncomes.map(income => (
                   <tr key={income.id} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-800 font-medium">{income.name}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
-                        {income.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-emerald-600 font-bold">
-                      {income.amount?.toLocaleString()} ج.م
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{income.date}</td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleDeleteIncome(income.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </td>
+                    {editingIncome === income.id ? (
+                      <>
+                        <td className="px-6 py-4">
+                          <input
+                            type="text"
+                            value={editIncomeData.name}
+                            onChange={(e) => setEditIncomeData({ ...editIncomeData, name: e.target.value })}
+                            className="w-full px-2 py-1 border rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={editIncomeData.category}
+                            onChange={(e) => setEditIncomeData({ ...editIncomeData, category: e.target.value })}
+                            className="w-full px-2 py-1 border rounded"
+                          >
+                            {categories.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-6 py-4">
+                          <input
+                            type="number"
+                            value={editIncomeData.amount}
+                            onChange={(e) => setEditIncomeData({ ...editIncomeData, amount: e.target.value })}
+                            className="w-full px-2 py-1 border rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <input
+                            type="date"
+                            value={editIncomeData.date}
+                            onChange={(e) => setEditIncomeData({ ...editIncomeData, date: e.target.value })}
+                            className="w-full px-2 py-1 border rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveEdit(income.id)}
+                              className="text-green-600 hover:text-green-800"
+                            >
+                              <Check className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => setEditingIncome(null)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-6 py-4 text-gray-800 font-medium">{income.name}</td>
+                        <td className="px-6 py-4">
+                          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
+                            {income.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-emerald-600 font-bold">
+                          {income.amount?.toLocaleString()} ج.م
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{income.date}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditIncome(income)}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              <Edit2 className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteIncome(income.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))
               )}
