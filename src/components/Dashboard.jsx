@@ -128,6 +128,16 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             <TrendingUp className="w-12 h-12 text-emerald-200" />
           </div>
         </div>
+
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-indigo-100 text-sm mb-1">إجمالي الأرصدة</p>
+              <p className="text-3xl font-bold">{totalAccounts.toLocaleString()} ج.م</p>
+            </div>
+            <Briefcase className="w-12 h-12 text-indigo-200" />
+          </div>
+        </div>
         
         <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
@@ -136,16 +146,6 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
               <p className="text-3xl font-bold">{totalExpenses.toLocaleString()} ج.م</p>
             </div>
             <TrendingDown className="w-12 h-12 text-red-200" />
-          </div>
-        </div>
-        
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-indigo-100 text-sm mb-1">إجمالي الأرصدة</p>
-              <p className="text-3xl font-bold">{totalAccounts.toLocaleString()} ج.م</p>
-            </div>
-            <Briefcase className="w-12 h-12 text-indigo-200" />
           </div>
         </div>
         
