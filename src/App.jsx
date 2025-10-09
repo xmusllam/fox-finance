@@ -138,13 +138,14 @@ function App() {
 
       <div className="container mx-auto px-4 py-8">
         {activeTab === 'dashboard' && (
-          <Dashboard 
+  <Dashboard 
             userId={user.uid} 
             dateFilter={dateFilter}
             customDateFrom={customDateFrom}
             customDateTo={customDateTo}
             yearStart={yearStart}
             monthEnd={monthEnd}
+            onNavigate={setActiveTab}
           />
         )}
         {activeTab === 'income' && (
