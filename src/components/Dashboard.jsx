@@ -148,16 +148,17 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             <TrendingDown className="w-12 h-12 text-red-200" />
           </div>
         </button>
-
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
+        
+        <div className={`bg-gradient-to-br ${netBalance >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-500 to-gray-600'} rounded-2xl shadow-lg p-6 text-white`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm mb-1">رأس المال</p>
-              <p className="text-4xl font-bold">{netBalance.toLocaleString()} ج.م</p>
+              <p className="text-blue-100 text-sm mb-1">النهائي</p>
+              <p className="text-4xl font-bold">{(totalCapital - totalExpenses).toLocaleString()} ج.م</p>
             </div>
-            <DollarSign className="w-12 h-12 text-purple-200" />
+            <Wallet className="w-12 h-12 text-blue-200" />
           </div>
         </div>
+      </div>
         
         <button
           onClick={() => onNavigate('accounts')}
@@ -185,16 +186,15 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           </div>
         </button>
         
-        <div className={`bg-gradient-to-br ${netBalance >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-500 to-gray-600'} rounded-2xl shadow-lg p-6 text-white`}>
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-100 text-sm mb-1">النهائي</p>
-              <p className="text-4xl font-bold">{(totalCapital - totalExpenses).toLocaleString()} ج.م</p>
+              <p className="text-purple-100 text-sm mb-1">رأس المال</p>
+              <p className="text-4xl font-bold">{netBalance.toLocaleString()} ج.م</p>
             </div>
-            <Wallet className="w-12 h-12 text-blue-200" />
+            <DollarSign className="w-12 h-12 text-purple-200" />
           </div>
         </div>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg p-6">
