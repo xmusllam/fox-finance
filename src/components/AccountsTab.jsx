@@ -53,14 +53,14 @@ export default function AccountsTab({ userId }) {
       return;
     }
 
-    await addDoc(collection(db, 'accounts'), {
-      name: newAccount.name,
-      balance: parseFloat(newAccount.balance),
-      type: newAccount.type,
-      isCredit: newAccount.isCredit,
-      creditLimit: newAccount.isCredit ? parseFloat(newAccount.creditLimit) : 0,
-      userId
-    });
+  await addDoc(collection(db, 'accounts'), {
+  name: newAccount.name,
+  balance: newAccount.isCredit ? -Math.abs(parseFloat(newAccount.balance)) : parseFloat(newAccount.balance),
+  type: newAccount.type,
+  isCredit: newAccount.isCredit,
+  creditLimit: newAccount.isCredit ? parseFloat(newAccount.creditLimit) : 0,
+  userId
+});
 
     setNewAccount({
       name: '',
