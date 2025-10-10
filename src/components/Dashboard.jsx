@@ -79,8 +79,8 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const totalAccounts = regularAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalDebts = Math.abs(creditAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0));
   
-  const totalCapital = totalIncome + totalAccounts;
-  const netBalance = totalCapital - totalExpenses - totalDebts;
+  const totalCapital = totalIncome;
+  const netBalance = totalAccounts - totalDebts;
 
   const categoryExpenses = useMemo(() => {
     const categories = {};
