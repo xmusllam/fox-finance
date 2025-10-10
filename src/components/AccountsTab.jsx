@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PlusCircle, Trash2, Wallet, CreditCard, AlertCircle, Edit2, X, Check, Settings } from 'lucide-react';
+import { PlusCircle, Trash2, Wallet, CreditCard, AlertCircle, Edit2, X, Check, Settings, FileText, TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react';
 
 export default function AccountsTab({ userId }) {
   const [accounts, setAccounts] = useState([]);
@@ -20,6 +20,110 @@ export default function AccountsTab({ userId }) {
   const [newTypeName, setNewTypeName] = useState('');
   const [editingType, setEditingType] = useState(null);
   const [editTypeValue, setEditTypeValue] = useState('');
+  // ⭐ States للمعاملات
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [accountTransactions, setAccountTransactions] = useState([]);
+  const [showTransactionsModal, setShowTransactionsModal] = useState(false);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+  // ⭐ دالة جلب المعاملات لحساب معين
+  const fetchAccountTransactions = async (accountId, accountName) => {
+    setLoadingTransactions(true);
+    setSelectedAccount({ id: accountId, name: accountName });
+    setShowTransactionsModal(true);
+
+    try {
+      const transactions = [];
+
+      // جلب الدخل
+      const incomesQuery = query(
+        collection(db, 'incomes'), 
+        where('userId', '==', userId),
+        where('accountId', '==', accountId)
+      );
+      const incomesSnapshot = await getDocs(incomesQuery);
+      incomesSnapshot.forEach(doc => {
+        const data = doc.data();
+        transactions.push({
+          id: doc.id,
+          type: 'income',
+          name: data.name,
+          amount: data.amount,
+          date: data.date,
+          category: data.category
+        });
+      });
+
+      // جلب المصروفات
+      const expensesQuery = query(
+        collection(db, 'expenses'), 
+        where('userId', '==', userId),
+        where('accountId', '==', accountId)
+      );
+      const expensesSnapshot = await getDocs(expensesQuery);
+      expensesSnapshot.forEach(doc => {
+        const data = doc.data();
+        transactions.push({
+          id: doc.id,
+          type: 'expense',
+          name: data.name,
+          amount: data.amount,
+          date: data.date,
+          category: data.category
+        });
+      });
+
+      // جلب التحويلات (من)
+      const transfersFromQuery = query(
+        collection(db, 'transfers'), 
+        where('userId', '==', userId),
+        where('fromAccountId', '==', accountId)
+      );
+      const transfersFromSnapshot = await getDocs(transfersFromQuery);
+      transfersFromSnapshot.forEach(doc => {
+        const data = doc.data();
+        const toAccount = accounts.find(a => a.id === data.toAccountId);
+        transactions.push({
+          id: doc.id,
+          type: 'transfer_out',
+          name: `تحويل إلى ${toAccount?.name || 'حساب محذوف'}`,
+          amount: data.amount,
+          date: data.date,
+          note: data.note
+        });
+      });
+
+      // جلب التحويلات (إلى)
+      const transfersToQuery = query(
+        collection(db, 'transfers'), 
+        where('userId', '==', userId),
+        where('toAccountId', '==', accountId)
+      );
+      const transfersToSnapshot = await getDocs(transfersToQuery);
+      transfersToSnapshot.forEach(doc => {
+        const data = doc.data();
+        const fromAccount = accounts.find(a => a.id === data.fromAccountId);
+        transactions.push({
+          id: doc.id,
+          type: 'transfer_in',
+          name: `تحويل من ${fromAccount?.name || 'حساب محذوف'}`,
+          amount: data.amount,
+          date: data.date,
+          note: data.note
+        });
+      });
+
+      // ترتيب المعاملات بالتاريخ (الأحدث أولاً)
+      transactions.sort((a, b) => b.date.localeCompare(a.date));
+
+      setAccountTransactions(transactions);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      alert('حدث خطأ أثناء جلب المعاملات');
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
 
   useEffect(() => {
     const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId));
@@ -444,6 +548,13 @@ export default function AccountsTab({ userId }) {
                     </div>
                     <div className="flex gap-2">
                       <button
+                        onClick={() => fetchAccountTransactions(account.id, account.name)}
+                        className="text-purple-600 hover:text-purple-800"
+                        title="عرض المعاملات"
+                      >
+                        <FileText className="w-5 h-5" />
+                      </button>
+                      <button
                         onClick={() => handleEditAccount(account)}
                         className="text-blue-600 hover:text-blue-800"
                       >
@@ -537,6 +648,13 @@ export default function AccountsTab({ userId }) {
                     </div>
                     <div className="flex gap-2">
                       <button
+                        onClick={() => fetchAccountTransactions(account.id, account.name)}
+                        className="text-purple-600 hover:text-purple-800"
+                        title="عرض المعاملات"
+                      >
+                        <FileText className="w-5 h-5" />
+                      </button>
+                      <button
                         onClick={() => handleEditAccount(account)}
                         className="text-blue-600 hover:text-blue-800"
                       >
@@ -593,6 +711,118 @@ export default function AccountsTab({ userId }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+      {/* ⭐ Modal المعاملات */}
+      {showTransactionsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-bold">معاملات الحساب</h3>
+                <p className="text-purple-100 mt-1">{selectedAccount?.name}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowTransactionsModal(false);
+                  setAccountTransactions([]);
+                  setSelectedAccount(null);
+                }}
+                className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingTransactions ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p className="text-gray-600">جاري التحميل...</p>
+                </div>
+              ) : accountTransactions.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-600 text-lg">لا توجد معاملات على هذا الحساب</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {accountTransactions.map(transaction => {
+                    let bgColor, textColor, icon, sign;
+                    
+                    if (transaction.type === 'income') {
+                      bgColor = 'bg-emerald-50';
+                      textColor = 'text-emerald-600';
+                      icon = <TrendingUp className="w-5 h-5" />;
+                      sign = '+';
+                    } else if (transaction.type === 'expense') {
+                      bgColor = 'bg-red-50';
+                      textColor = 'text-red-600';
+                      icon = <TrendingDown className="w-5 h-5" />;
+                      sign = '-';
+                    } else if (transaction.type === 'transfer_in') {
+                      bgColor = 'bg-blue-50';
+                      textColor = 'text-blue-600';
+                      icon = <ArrowRightLeft className="w-5 h-5" />;
+                      sign = '+';
+                    } else {
+                      bgColor = 'bg-orange-50';
+                      textColor = 'text-orange-600';
+                      icon = <ArrowRightLeft className="w-5 h-5" />;
+                      sign = '-';
+                    }
+
+                    return (
+                      <div
+                        key={transaction.id}
+                        className={`${bgColor} rounded-xl p-4 border-2 border-${bgColor.replace('50', '200')}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className={`w-10 h-10 ${bgColor.replace('50', '100')} rounded-full flex items-center justify-center ${textColor}`}>
+                              {icon}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold text-gray-800">{transaction.name}</p>
+                              <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                                <span>{transaction.date}</span>
+                                {transaction.category && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="bg-white px-2 py-0.5 rounded">{transaction.category}</span>
+                                  </>
+                                )}
+                                {transaction.note && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{transaction.note}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`font-bold text-lg ${textColor}`}>
+                            {sign}{transaction.amount.toLocaleString()} ج.م
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {!loadingTransactions && accountTransactions.length > 0 && (
+              <div className="bg-gray-50 p-4 border-t">
+                <p className="text-center text-gray-600">
+                  إجمالي المعاملات: <strong>{accountTransactions.length}</strong>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
