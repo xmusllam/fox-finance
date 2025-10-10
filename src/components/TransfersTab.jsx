@@ -6,11 +6,15 @@ import { PlusCircle, Trash2, ArrowRightLeft, CreditCard, Wallet } from 'lucide-r
 export default function TransfersTab({ userId }) {
   const [transfers, setTransfers] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  
+  // التاريخ الافتراضي = اليوم
+  const today = new Date().toISOString().split('T')[0];
+  
   const [newTransfer, setNewTransfer] = useState({
     fromAccountId: '',
     toAccountId: '',
     amount: '',
-    date: '',
+    date: today, // ⭐ التعديل: التاريخ الافتراضي
     note: ''
   });
 
@@ -97,7 +101,7 @@ export default function TransfersTab({ userId }) {
       fromAccountId: '',
       toAccountId: '',
       amount: '',
-      date: '',
+      date: today, // ⭐ إعادة تعيين التاريخ لليوم الحالي
       note: ''
     });
 
