@@ -15,3 +15,35 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* iOS PWA Fixes */
+@supports (-webkit-touch-callout: none) {
+  body {
+    /* Prevent zoom on input focus */
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  input, select, textarea {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS */
+  }
+}
+
+/* Safe area insets for iOS */
+body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Prevent pull-to-refresh */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Better touch handling */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
