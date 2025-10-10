@@ -77,7 +77,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const creditAccounts = accounts.filter(acc => acc.isCredit);
   
   const totalAccounts = regularAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
-  const totalDebts = Math.abs(creditAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0));
+  const totalDebts = Math.abs(creditAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance || 0), 0));
   
   const totalCapital = totalIncome;
   const netBalance = totalAccounts - totalDebts;
