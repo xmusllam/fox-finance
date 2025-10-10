@@ -9,12 +9,17 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
   const [categories, setCategories] = useState(['إيجار', 'فواتير', 'أقساط', 'طعام', 'مواصلات', 'ترفيه', 'صحة', 'مصروفات عامة']);
   const [categoriesDocId, setCategoriesDocId] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
+  
+  // التاريخ الافتراضي = اليوم
+  const today = new Date().toISOString().split('T')[0];
+  
   const [newExpense, setNewExpense] = useState({
     name: '',
     amount: '',
-    date: '',
+    date: today, // ⭐ التاريخ الافتراضي
     category: 'مصروفات عامة',
     accountId: '',
+    affectsAccount: true, // ⭐ تسمع في حساب؟ (افتراضي: نعم)
     recurring: false,
     months: 1
   });
@@ -55,7 +60,6 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
       unsubCategories();
     };
   }, [userId]);
-
   const filterByDate = (items) => {
     if (dateFilter === 'all') return items;
     
@@ -91,6 +95,39 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     });
   };
 
+  // ⭐ دالة جدولة تطبيق المعاملة على الحساب
+  const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
+    const transactionDateTime = new Date(transactionDate + 'T00:00:00');
+    const now = new Date();
+    const delay = transactionDateTime - now;
+
+    if (delay <= 0) {
+      // إذا التاريخ في الماضي أو اليوم، نفذ فورًا
+      const account = accounts.find(a => a.id === accountId);
+      if (account) {
+        if (account.isCredit) {
+          await updateDoc(doc(db, 'accounts', accountId), {
+            balance: (account.balance || 0) - amount
+          });
+        } else {
+          await updateDoc(doc(db, 'accounts', accountId), {
+            balance: (account.balance || 0) - amount
+          });
+        }
+      }
+    } else {
+      // إذا في المستقبل، احفظ كـ "معاملة مجدولة"
+      await addDoc(collection(db, 'scheduledTransactions'), {
+        type: 'expense',
+        accountId: accountId,
+        amount: amount,
+        scheduledDate: transactionDate,
+        userId: userId,
+        createdAt: new Date().toISOString()
+      });
+    }
+  };
+
   const addRecurringExpenses = async () => {
     const months = newExpense.recurring ? parseInt(newExpense.months) || 1 : 1;
     const startDate = new Date(newExpense.date);
@@ -98,37 +135,34 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     for (let i = 0; i < months; i++) {
       const itemDate = new Date(startDate);
       itemDate.setMonth(startDate.getMonth() + i);
+      const dateString = itemDate.toISOString().split('T')[0];
       
       await addDoc(collection(db, 'expenses'), {
         name: newExpense.name,
         amount: parseFloat(newExpense.amount),
-        date: itemDate.toISOString().split('T')[0],
+        date: dateString,
         category: newExpense.category,
-        accountId: newExpense.accountId,
+        accountId: newExpense.affectsAccount ? newExpense.accountId : null,
+        affectsAccount: newExpense.affectsAccount,
         recurring: newExpense.recurring,
         userId
       });
 
-      if (newExpense.accountId) {
-        const account = accounts.find(a => a.id === newExpense.accountId);
-        if (account) {
-          if (account.isCredit) {
-            await updateDoc(doc(db, 'accounts', newExpense.accountId), {
-              balance: (account.balance || 0) - parseFloat(newExpense.amount)
-            });
-          } else {
-            await updateDoc(doc(db, 'accounts', newExpense.accountId), {
-              balance: (account.balance || 0) - parseFloat(newExpense.amount)
-            });
-          }
-        }
+      // ⭐ تطبيق على الحساب فقط إذا affectsAccount = true
+      if (newExpense.affectsAccount && newExpense.accountId) {
+        await scheduleAccountUpdate(newExpense.accountId, parseFloat(newExpense.amount), dateString);
       }
     }
   };
 
   const handleAddExpense = async () => {
-    if (!newExpense.name || !newExpense.amount || !newExpense.date || !newExpense.accountId) {
-      alert('يرجى ملء جميع الحقول');
+    if (!newExpense.name || !newExpense.amount || !newExpense.date) {
+      alert('يرجى ملء الحقول المطلوبة');
+      return;
+    }
+
+    if (newExpense.affectsAccount && !newExpense.accountId) {
+      alert('يرجى اختيار الحساب');
       return;
     }
     
@@ -136,9 +170,10 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     setNewExpense({
       name: '',
       amount: '',
-      date: '',
+      date: today,
       category: 'مصروفات عامة',
       accountId: '',
+      affectsAccount: true,
       recurring: false,
       months: 1
     });
@@ -147,7 +182,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
   const handleDeleteExpense = async (expense) => {
     if (!confirm('هل أنت متأكد من حذف هذا المصروف؟')) return;
 
-    if (expense.accountId) {
+    if (expense.affectsAccount && expense.accountId) {
       const account = accounts.find(a => a.id === expense.accountId);
       if (account) {
         if (account.isCredit) {
@@ -249,7 +284,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
   };
 
   const handleSaveEdit = async (expense) => {
-    if (!editExpenseData.name || !editExpenseData.amount || !editExpenseData.date || !editExpenseData.accountId) {
+    if (!editExpenseData.name || !editExpenseData.amount || !editExpenseData.date) {
       alert('يرجى ملء جميع الحقول');
       return;
     }
@@ -258,29 +293,31 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     const newAmount = parseFloat(editExpenseData.amount);
     const diff = newAmount - oldAmount;
 
-    if (expense.accountId === editExpenseData.accountId && diff !== 0) {
-      const account = accounts.find(a => a.id === expense.accountId);
-      if (account) {
-        await updateDoc(doc(db, 'accounts', expense.accountId), {
-          balance: (account.balance || 0) - diff
-        });
-      }
-    } else if (expense.accountId !== editExpenseData.accountId) {
-      if (expense.accountId) {
-        const oldAccount = accounts.find(a => a.id === expense.accountId);
-        if (oldAccount) {
+    if (expense.affectsAccount) {
+      if (expense.accountId === editExpenseData.accountId && diff !== 0) {
+        const account = accounts.find(a => a.id === expense.accountId);
+        if (account) {
           await updateDoc(doc(db, 'accounts', expense.accountId), {
-            balance: (oldAccount.balance || 0) + oldAmount
+            balance: (account.balance || 0) - diff
           });
         }
-      }
+      } else if (expense.accountId !== editExpenseData.accountId) {
+        if (expense.accountId) {
+          const oldAccount = accounts.find(a => a.id === expense.accountId);
+          if (oldAccount) {
+            await updateDoc(doc(db, 'accounts', expense.accountId), {
+              balance: (oldAccount.balance || 0) + oldAmount
+            });
+          }
+        }
 
-      if (editExpenseData.accountId) {
-        const newAccount = accounts.find(a => a.id === editExpenseData.accountId);
-        if (newAccount) {
-          await updateDoc(doc(db, 'accounts', editExpenseData.accountId), {
-            balance: (newAccount.balance || 0) - newAmount
-          });
+        if (editExpenseData.accountId) {
+          const newAccount = accounts.find(a => a.id === editExpenseData.accountId);
+          if (newAccount) {
+            await updateDoc(doc(db, 'accounts', editExpenseData.accountId), {
+              balance: (newAccount.balance || 0) - newAmount
+            });
+          }
         }
       }
     }
@@ -318,7 +355,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     }));
   };
 
-  return (
+return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
@@ -420,102 +457,135 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">اسم المصروف</label>
-            <input
-              type="text"
-              value={newExpense.name}
-              onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-              placeholder="مثال: إيجار شقة"
-            />
-          </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">اسم المصروف</label>
+              <input
+                type="text"
+                value={newExpense.name}
+                onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                placeholder="مثال: إيجار شقة"
+              />
+            </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">المبلغ (ج.م)</label>
-            <input
-              type="number"
-              value={newExpense.amount}
-              onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-              placeholder="0"
-            />
-          </div>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">المبلغ (ج.م)</label>
+              <input
+                type="number"
+                value={newExpense.amount}
+                onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                placeholder="0"
+              />
+            </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">التاريخ</label>
-            <input
-              type="date"
-              value={newExpense.date}
-              onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-            />
-          </div>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">التاريخ</label>
+              <input
+                type="date"
+                value={newExpense.date}
+                onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              />
+            </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">الفئة</label>
-            <select
-              value={newExpense.category}
-              onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-            >
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">دفعت من</label>
-            <select
-              value={newExpense.accountId}
-              onChange={(e) => setNewExpense({ ...newExpense, accountId: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-            >
-              <option value="">اختر الحساب</option>
-              {accounts.map(acc => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name} ({acc.isCredit ? 'كريدت كارد' : acc.type})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">تكرار شهري؟</label>
-            <div className="flex items-center gap-4 h-12">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={newExpense.recurring}
-                  onChange={(e) => setNewExpense({ ...newExpense, recurring: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <span>نعم</span>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">
+                ⭐ عايز المعاملة دي تسمع في حساب؟
               </label>
-              {newExpense.recurring && (
-                <input
-                  type="number"
-                  value={newExpense.months}
-                  onChange={(e) => setNewExpense({ ...newExpense, months: e.target.value })}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-lg"
-                  placeholder="6"
-                  min="1"
-                />
-              )}
-              {newExpense.recurring && <span className="text-sm text-gray-600">شهور</span>}
+              <div className="flex items-center gap-4 h-12">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newExpense.affectsAccount}
+                    onChange={(e) => setNewExpense({ ...newExpense, affectsAccount: e.target.checked })}
+                    className="w-5 h-5"
+                  />
+                  <span className="font-medium">نعم، تسمع في حساب</span>
+                </label>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-end lg:col-span-2">
-            <button
-              onClick={handleAddExpense}
-              className="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-            >
-              <PlusCircle className="w-5 h-5" />
-              إضافة المصروف
-            </button>
+          {/* ⭐ أزرار الفئات بدلاً من القائمة المنسدلة */}
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">الفئة</label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setNewExpense({ ...newExpense, category: cat })}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    newExpense.category === cat
+                      ? 'bg-red-600 text-white shadow-lg scale-105'
+                      : 'bg-gray-100 text-gray-700 hover:bg-red-100'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ⭐ إظهار اختيار الحساب فقط إذا affectsAccount = true */}
+          {newExpense.affectsAccount && (
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">دفعت من</label>
+              <select
+                value={newExpense.accountId}
+                onChange={(e) => setNewExpense({ ...newExpense, accountId: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              >
+                <option value="">اختر الحساب</option>
+                {accounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} ({acc.isCredit ? 'كريدت كارد' : acc.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">تكرار شهري؟</label>
+              <div className="flex items-center gap-4 h-12">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newExpense.recurring}
+                    onChange={(e) => setNewExpense({ ...newExpense, recurring: e.target.checked })}
+                    className="w-5 h-5"
+                  />
+                  <span>نعم</span>
+                </label>
+                {newExpense.recurring && (
+                  <>
+                    <input
+                      type="number"
+                      value={newExpense.months}
+                      onChange={(e) => setNewExpense({ ...newExpense, months: e.target.value })}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="6"
+                      min="1"
+                    />
+                    <span className="text-sm text-gray-600">شهور</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={handleAddExpense}
+                className="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+              >
+                <PlusCircle className="w-5 h-5" />
+                إضافة المصروف
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -612,7 +682,9 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
                           <div key={expense.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
                             <div className="flex-1">
                               <p className="font-semibold text-gray-800">{expense.name}</p>
-                              <p className="text-sm text-gray-600">{expense.date} • {account?.name || 'غير محدد'}</p>
+                              <p className="text-sm text-gray-600">
+                                {expense.date} • {account?.name || (expense.affectsAccount ? 'غير محدد' : 'لا يؤثر على حساب')}
+                              </p>
                             </div>
                             <div className="flex items-center gap-4">
                               <span className="font-bold text-red-600">{expense.amount.toLocaleString()} ج.م</span>
