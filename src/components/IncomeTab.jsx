@@ -9,12 +9,17 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
   const [categories, setCategories] = useState(['راتب', 'أرباح', 'استثمار', 'هدية', 'أخرى']);
   const [categoriesDocId, setCategoriesDocId] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
+  
+  // التاريخ الافتراضي = اليوم
+  const today = new Date().toISOString().split('T')[0];
+  
   const [newIncome, setNewIncome] = useState({
     name: '',
     amount: '',
-    date: '',
+    date: today, // ⭐ التاريخ الافتراضي
     category: 'راتب',
     accountId: '',
+    affectsAccount: true, // ⭐ تسمع في حساب؟ (افتراضي: نعم)
     recurring: false,
     months: 1
   });
@@ -91,6 +96,33 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     });
   };
 
+  // ⭐ دالة جدولة تطبيق المعاملة على الحساب
+  const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
+    const transactionDateTime = new Date(transactionDate + 'T00:00:00');
+    const now = new Date();
+    const delay = transactionDateTime - now;
+
+    if (delay <= 0) {
+      // إذا التاريخ في الماضي أو اليوم، نفذ فورًا
+      const account = accounts.find(a => a.id === accountId);
+      if (account) {
+        await updateDoc(doc(db, 'accounts', accountId), {
+          balance: (account.balance || 0) + amount
+        });
+      }
+    } else {
+      // إذا في المستقبل، احفظ كـ "معاملة مجدولة"
+      await addDoc(collection(db, 'scheduledTransactions'), {
+        type: 'income',
+        accountId: accountId,
+        amount: amount,
+        scheduledDate: transactionDate,
+        userId: userId,
+        createdAt: new Date().toISOString()
+      });
+    }
+  };
+
   const addRecurringIncomes = async () => {
     const months = newIncome.recurring ? parseInt(newIncome.months) || 1 : 1;
     const startDate = new Date(newIncome.date);
@@ -98,32 +130,34 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     for (let i = 0; i < months; i++) {
       const itemDate = new Date(startDate);
       itemDate.setMonth(startDate.getMonth() + i);
+      const dateString = itemDate.toISOString().split('T')[0];
       
       await addDoc(collection(db, 'incomes'), {
         name: newIncome.name,
         amount: parseFloat(newIncome.amount),
-        date: itemDate.toISOString().split('T')[0],
+        date: dateString,
         category: newIncome.category,
-        accountId: newIncome.accountId,
+        accountId: newIncome.affectsAccount ? newIncome.accountId : null,
+        affectsAccount: newIncome.affectsAccount,
         recurring: newIncome.recurring,
         userId
       });
 
-      if (newIncome.accountId) {
-        const accountRef = doc(db, 'accounts', newIncome.accountId);
-        const account = accounts.find(a => a.id === newIncome.accountId);
-        if (account) {
-          await updateDoc(accountRef, {
-            balance: (account.balance || 0) + parseFloat(newIncome.amount)
-          });
-        }
+      // ⭐ تطبيق على الحساب فقط إذا affectsAccount = true
+      if (newIncome.affectsAccount && newIncome.accountId) {
+        await scheduleAccountUpdate(newIncome.accountId, parseFloat(newIncome.amount), dateString);
       }
     }
   };
 
   const handleAddIncome = async () => {
-    if (!newIncome.name || !newIncome.amount || !newIncome.date || !newIncome.accountId) {
-      alert('يرجى ملء جميع الحقول');
+    if (!newIncome.name || !newIncome.amount || !newIncome.date) {
+      alert('يرجى ملء الحقول المطلوبة');
+      return;
+    }
+
+    if (newIncome.affectsAccount && !newIncome.accountId) {
+      alert('يرجى اختيار الحساب');
       return;
     }
     
@@ -131,9 +165,10 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     setNewIncome({
       name: '',
       amount: '',
-      date: '',
+      date: today,
       category: 'راتب',
       accountId: '',
+      affectsAccount: true,
       recurring: false,
       months: 1
     });
@@ -142,7 +177,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
   const handleDeleteIncome = async (income) => {
     if (!confirm('هل أنت متأكد من حذف هذا الدخل؟')) return;
 
-    if (income.accountId) {
+    if (income.affectsAccount && income.accountId) {
       const account = accounts.find(a => a.id === income.accountId);
       if (account) {
         await updateDoc(doc(db, 'accounts', income.accountId), {
@@ -238,7 +273,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
   };
 
   const handleSaveEdit = async (income) => {
-    if (!editIncomeData.name || !editIncomeData.amount || !editIncomeData.date || !editIncomeData.accountId) {
+    if (!editIncomeData.name || !editIncomeData.amount || !editIncomeData.date) {
       alert('يرجى ملء جميع الحقول');
       return;
     }
@@ -247,29 +282,31 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
     const newAmount = parseFloat(editIncomeData.amount);
     const diff = newAmount - oldAmount;
 
-    if (income.accountId === editIncomeData.accountId && diff !== 0) {
-      const account = accounts.find(a => a.id === income.accountId);
-      if (account) {
-        await updateDoc(doc(db, 'accounts', income.accountId), {
-          balance: (account.balance || 0) + diff
-        });
-      }
-    } else if (income.accountId !== editIncomeData.accountId) {
-      if (income.accountId) {
-        const oldAccount = accounts.find(a => a.id === income.accountId);
-        if (oldAccount) {
+    if (income.affectsAccount) {
+      if (income.accountId === editIncomeData.accountId && diff !== 0) {
+        const account = accounts.find(a => a.id === income.accountId);
+        if (account) {
           await updateDoc(doc(db, 'accounts', income.accountId), {
-            balance: (oldAccount.balance || 0) - oldAmount
+            balance: (account.balance || 0) + diff
           });
         }
-      }
+      } else if (income.accountId !== editIncomeData.accountId) {
+        if (income.accountId) {
+          const oldAccount = accounts.find(a => a.id === income.accountId);
+          if (oldAccount) {
+            await updateDoc(doc(db, 'accounts', income.accountId), {
+              balance: (oldAccount.balance || 0) - oldAmount
+            });
+          }
+        }
 
-      if (editIncomeData.accountId) {
-        const newAccount = accounts.find(a => a.id === editIncomeData.accountId);
-        if (newAccount) {
-          await updateDoc(doc(db, 'accounts', editIncomeData.accountId), {
-            balance: (newAccount.balance || 0) + newAmount
-          });
+        if (editIncomeData.accountId) {
+          const newAccount = accounts.find(a => a.id === editIncomeData.accountId);
+          if (newAccount) {
+            await updateDoc(doc(db, 'accounts', editIncomeData.accountId), {
+              balance: (newAccount.balance || 0) + newAmount
+            });
+          }
         }
       }
     }
@@ -309,7 +346,7 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
 
   const regularAccounts = accounts.filter(acc => !acc.isCredit);
 
-  return (
+return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
@@ -411,100 +448,133 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">اسم مصدر الدخل</label>
-            <input
-              type="text"
-              value={newIncome.name}
-              onChange={(e) => setNewIncome({ ...newIncome, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-              placeholder="مثال: راتب شهري"
-            />
-          </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">اسم مصدر الدخل</label>
+              <input
+                type="text"
+                value={newIncome.name}
+                onChange={(e) => setNewIncome({ ...newIncome, name: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                placeholder="مثال: راتب شهري"
+              />
+            </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">المبلغ (ج.م)</label>
-            <input
-              type="number"
-              value={newIncome.amount}
-              onChange={(e) => setNewIncome({ ...newIncome, amount: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-              placeholder="0"
-            />
-          </div>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">المبلغ (ج.م)</label>
+              <input
+                type="number"
+                value={newIncome.amount}
+                onChange={(e) => setNewIncome({ ...newIncome, amount: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                placeholder="0"
+              />
+            </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">التاريخ</label>
-            <input
-              type="date"
-              value={newIncome.date}
-              onChange={(e) => setNewIncome({ ...newIncome, date: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-            />
-          </div>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">التاريخ</label>
+              <input
+                type="date"
+                value={newIncome.date}
+                onChange={(e) => setNewIncome({ ...newIncome, date: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              />
+            </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">الفئة</label>
-            <select
-              value={newIncome.category}
-              onChange={(e) => setNewIncome({ ...newIncome, category: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-            >
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">الحساب</label>
-            <select
-              value={newIncome.accountId}
-              onChange={(e) => setNewIncome({ ...newIncome, accountId: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-            >
-              <option value="">اختر الحساب</option>
-              {regularAccounts.map(acc => (
-                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">تكرار شهري؟</label>
-            <div className="flex items-center gap-4 h-12">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={newIncome.recurring}
-                  onChange={(e) => setNewIncome({ ...newIncome, recurring: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <span>نعم</span>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">
+                ⭐ عايز المعاملة دي تسمع في حساب؟
               </label>
-              {newIncome.recurring && (
-                <input
-                  type="number"
-                  value={newIncome.months}
-                  onChange={(e) => setNewIncome({ ...newIncome, months: e.target.value })}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-lg"
-                  placeholder="6"
-                  min="1"
-                />
-              )}
-              {newIncome.recurring && <span className="text-sm text-gray-600">شهور</span>}
+              <div className="flex items-center gap-4 h-12">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newIncome.affectsAccount}
+                    onChange={(e) => setNewIncome({ ...newIncome, affectsAccount: e.target.checked })}
+                    className="w-5 h-5"
+                  />
+                  <span className="font-medium">نعم، تسمع في حساب</span>
+                </label>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-end lg:col-span-2">
-            <button
-              onClick={handleAddIncome}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-            >
-              <PlusCircle className="w-5 h-5" />
-              إضافة الدخل
-            </button>
+          {/* ⭐ أزرار الفئات بدلاً من القائمة المنسدلة */}
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">الفئة</label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setNewIncome({ ...newIncome, category: cat })}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    newIncome.category === cat
+                      ? 'bg-emerald-600 text-white shadow-lg scale-105'
+                      : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ⭐ إظهار اختيار الحساب فقط إذا affectsAccount = true */}
+          {newIncome.affectsAccount && (
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">الحساب</label>
+              <select
+                value={newIncome.accountId}
+                onChange={(e) => setNewIncome({ ...newIncome, accountId: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              >
+                <option value="">اختر الحساب</option>
+                {regularAccounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">تكرار شهري؟</label>
+              <div className="flex items-center gap-4 h-12">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newIncome.recurring}
+                    onChange={(e) => setNewIncome({ ...newIncome, recurring: e.target.checked })}
+                    className="w-5 h-5"
+                  />
+                  <span>نعم</span>
+                </label>
+                {newIncome.recurring && (
+                  <>
+                    <input
+                      type="number"
+                      value={newIncome.months}
+                      onChange={(e) => setNewIncome({ ...newIncome, months: e.target.value })}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="6"
+                      min="1"
+                    />
+                    <span className="text-sm text-gray-600">شهور</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={handleAddIncome}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+              >
+                <PlusCircle className="w-5 h-5" />
+                إضافة الدخل
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -601,7 +671,9 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
                           <div key={income.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
                             <div className="flex-1">
                               <p className="font-semibold text-gray-800">{income.name}</p>
-                              <p className="text-sm text-gray-600">{income.date} • {account?.name || 'غير محدد'}</p>
+                              <p className="text-sm text-gray-600">
+                                {income.date} • {account?.name || (income.affectsAccount ? 'غير محدد' : 'لا يؤثر على حساب')}
+                              </p>
                             </div>
                             <div className="flex items-center gap-4">
                               <span className="font-bold text-emerald-600">{income.amount.toLocaleString()} ج.م</span>
