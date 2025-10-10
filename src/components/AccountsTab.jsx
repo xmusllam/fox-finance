@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PlusCircle, Trash2, Wallet, CreditCard, AlertCircle } from 'lucide-react';
+import { PlusCircle, Trash2, Wallet, CreditCard, AlertCircle, Edit2, X, Check, Settings } from 'lucide-react';
 
 export default function AccountsTab({ userId }) {
   const [accounts, setAccounts] = useState([]);
+  const [accountTypes, setAccountTypes] = useState(['بنك', 'نقدي', 'محفظة إلكترونية', 'استثمار', 'مدخرات']);
+  const [accountTypesDocId, setAccountTypesDocId] = useState(null);
   const [newAccount, setNewAccount] = useState({
     name: '',
     balance: '',
@@ -12,6 +14,12 @@ export default function AccountsTab({ userId }) {
     isCredit: false,
     creditLimit: ''
   });
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [editAccountData, setEditAccountData] = useState({});
+  const [showTypeManager, setShowTypeManager] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [editingType, setEditingType] = useState(null);
+  const [editTypeValue, setEditTypeValue] = useState('');
 
   useEffect(() => {
     const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId));
@@ -19,7 +27,19 @@ export default function AccountsTab({ userId }) {
       setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => unsubAccounts();
+    const typesQuery = query(collection(db, 'accountTypes'), where('userId', '==', userId));
+    const unsubTypes = onSnapshot(typesQuery, (snapshot) => {
+      if (!snapshot.empty) {
+        const docData = snapshot.docs[0];
+        setAccountTypes(docData.data().types || ['بنك', 'نقدي', 'محفظة إلكترونية', 'استثمار', 'مدخرات']);
+        setAccountTypesDocId(docData.id);
+      }
+    });
+
+    return () => {
+      unsubAccounts();
+      unsubTypes();
+    };
   }, [userId]);
 
   const handleAddAccount = async () => {
@@ -51,9 +71,109 @@ export default function AccountsTab({ userId }) {
     });
   };
 
+  const handleEditAccount = (account) => {
+    setEditingAccount(account.id);
+    setEditAccountData({
+      name: account.name,
+      balance: account.balance,
+      type: account.type,
+      creditLimit: account.creditLimit || 0
+    });
+  };
+
+  const handleSaveEdit = async (accountId) => {
+    if (!editAccountData.name || editAccountData.balance === '') {
+      alert('يرجى ملء جميع الحقول');
+      return;
+    }
+
+    const account = accounts.find(a => a.id === accountId);
+    
+    await updateDoc(doc(db, 'accounts', accountId), {
+      name: editAccountData.name,
+      balance: parseFloat(editAccountData.balance),
+      type: editAccountData.type,
+      creditLimit: account.isCredit ? parseFloat(editAccountData.creditLimit) : 0
+    });
+
+    setEditingAccount(null);
+    setEditAccountData({});
+  };
+
   const handleDeleteAccount = async (id) => {
     if (confirm('هل أنت متأكد من حذف هذا الحساب؟')) {
       await deleteDoc(doc(db, 'accounts', id));
+    }
+  };
+
+  const handleAddType = async () => {
+    if (!newTypeName || accountTypes.includes(newTypeName)) {
+      alert('النوع موجود بالفعل أو فارغ');
+      return;
+    }
+
+    const newTypes = [...accountTypes, newTypeName];
+    
+    if (accountTypesDocId) {
+      await updateDoc(doc(db, 'accountTypes', accountTypesDocId), {
+        types: newTypes
+      });
+    } else {
+      await addDoc(collection(db, 'accountTypes'), {
+        userId,
+        types: newTypes
+      });
+    }
+
+    setNewTypeName('');
+  };
+
+  const handleEditType = async (oldName) => {
+    if (!editTypeValue || editTypeValue === oldName) {
+      setEditingType(null);
+      return;
+    }
+
+    if (accountTypes.includes(editTypeValue)) {
+      alert('هذا الاسم مستخدم بالفعل');
+      return;
+    }
+
+    const newTypes = accountTypes.map(t => t === oldName ? editTypeValue : t);
+    
+    if (accountTypesDocId) {
+      await updateDoc(doc(db, 'accountTypes', accountTypesDocId), {
+        types: newTypes
+      });
+    }
+
+    const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId), where('type', '==', oldName));
+    const snapshot = await getDocs(accountsQuery);
+    await Promise.all(snapshot.docs.map(d => updateDoc(doc(db, 'accounts', d.id), { type: editTypeValue })));
+
+    setEditingType(null);
+    setEditTypeValue('');
+  };
+
+  const handleDeleteType = async (typeName) => {
+    const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId), where('type', '==', typeName));
+    const snapshot = await getDocs(accountsQuery);
+    const count = snapshot.size;
+
+    if (count > 0) {
+      const action = confirm(`يوجد ${count} حساب بنوع "${typeName}".\n\nاختر:\n- OK: تحويلها لنوع "بنك"\n- Cancel: إلغاء الحذف`);
+      
+      if (!action) return;
+
+      await Promise.all(snapshot.docs.map(d => updateDoc(doc(db, 'accounts', d.id), { type: 'بنك' })));
+    }
+
+    const newTypes = accountTypes.filter(t => t !== typeName);
+    
+    if (accountTypesDocId) {
+      await updateDoc(doc(db, 'accountTypes', accountTypesDocId), {
+        types: newTypes
+      });
     }
   };
 
@@ -66,7 +186,94 @@ export default function AccountsTab({ userId }) {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-6">
-        <h3 className="text-2xl font-bold text-gray-800 mb-6">إضافة حساب جديد</h3>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-gray-800">إضافة حساب جديد</h3>
+          <button
+            onClick={() => setShowTypeManager(!showTypeManager)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200"
+          >
+            <Settings className="w-4 h-4" />
+            إدارة الأنواع
+          </button>
+        </div>
+
+        {showTypeManager && (
+          <div className="mb-6 p-6 bg-purple-50 rounded-xl border-2 border-purple-200">
+            <h4 className="font-bold text-purple-800 mb-4 text-lg">إدارة أنواع الحسابات</h4>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 font-semibold mb-2">إضافة نوع جديد</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg"
+                  placeholder="اسم النوع الجديد"
+                />
+                <button
+                  onClick={handleAddType}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-3">الأنواع الحالية</label>
+              <div className="flex flex-wrap gap-2">
+                {accountTypes.map(type => (
+                  <div key={type} className="flex items-center gap-2 bg-white border-2 border-purple-300 rounded-lg p-2">
+                    {editingType === type ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editTypeValue}
+                          onChange={(e) => setEditTypeValue(e.target.value)}
+                          className="px-2 py-1 border border-purple-400 rounded w-32"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleEditType(type)}
+                          className="text-green-600 hover:text-green-800"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingType(null)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-gray-700">{type}</span>
+                        <button
+                          onClick={() => {
+                            setEditingType(type);
+                            setEditTypeValue(type);
+                          }}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteType(type)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <label className="block text-gray-700 font-semibold mb-2">اسم الحساب</label>
@@ -94,12 +301,9 @@ export default function AccountsTab({ userId }) {
               }}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg"
             >
-              <option value="بنك">حساب بنكي</option>
-              <option value="محفظة إلكترونية">محفظة إلكترونية</option>
-              <option value="نقدي">نقدي</option>
-              <option value="سلفة لصديق">سلفة لصديق</option>
-              <option value="استثمار">استثمار</option>
-              <option value="مدخرات">مدخرات</option>
+              {accountTypes.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
               <option value="كريدت كارد">كريدت كارد</option>
             </select>
           </div>
@@ -181,31 +385,83 @@ export default function AccountsTab({ userId }) {
           <h3 className="text-2xl font-bold text-gray-800 p-6 border-b">الحسابات العادية</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
             {regularAccounts.map(account => (
-              <div
-                key={account.id}
-                className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 border-2 border-purple-200 hover:shadow-lg transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-purple-200 rounded-full flex items-center justify-center">
-                      <Wallet className="w-6 h-6 text-purple-700" />
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-bold text-gray-800">{account.name}</h4>
-                      <span className="text-sm text-purple-600 font-medium">{account.type}</span>
+              editingAccount === account.id ? (
+                <div key={account.id} className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 border-2 border-purple-300">
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={editAccountData.name}
+                      onChange={(e) => setEditAccountData({ ...editAccountData, name: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="اسم الحساب"
+                    />
+                    <select
+                      value={editAccountData.type}
+                      onChange={(e) => setEditAccountData({ ...editAccountData, type: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    >
+                      {accountTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={editAccountData.balance}
+                      onChange={(e) => setEditAccountData({ ...editAccountData, balance: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="الرصيد"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSaveEdit(account.id)}
+                        className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
+                      >
+                        <Check className="w-5 h-5 mx-auto" />
+                      </button>
+                      <button
+                        onClick={() => setEditingAccount(null)}
+                        className="flex-1 bg-gray-400 text-white py-2 rounded-lg hover:bg-gray-500"
+                      >
+                        <X className="w-5 h-5 mx-auto" />
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteAccount(account.id)}
-                    className="text-red-500 hover:text-red-700 transition-colors"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
                 </div>
-                <div className="text-3xl font-bold text-purple-700">
-                  {account.balance?.toLocaleString()} ج.م
+              ) : (
+                <div
+                  key={account.id}
+                  className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 border-2 border-purple-200 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-purple-200 rounded-full flex items-center justify-center">
+                        <Wallet className="w-6 h-6 text-purple-700" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-800">{account.name}</h4>
+                        <span className="text-sm text-purple-600 font-medium">{account.type}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditAccount(account)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAccount(account.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-purple-700">
+                    {account.balance?.toLocaleString()} ج.م
+                  </div>
                 </div>
-              </div>
+              )
             ))}
           </div>
         </div>
@@ -224,7 +480,47 @@ export default function AccountsTab({ userId }) {
               const available = limit - debt;
               const usagePercent = limit > 0 ? (debt / limit) * 100 : 0;
               
-              return (
+              return editingAccount === account.id ? (
+                <div key={account.id} className="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-6 border-2 border-red-300">
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={editAccountData.name}
+                      onChange={(e) => setEditAccountData({ ...editAccountData, name: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="اسم البطاقة"
+                    />
+                    <input
+                      type="number"
+                      value={Math.abs(editAccountData.balance)}
+                      onChange={(e) => setEditAccountData({ ...editAccountData, balance: -Math.abs(parseFloat(e.target.value)) })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="الدَين"
+                    />
+                    <input
+                      type="number"
+                      value={editAccountData.creditLimit}
+                      onChange={(e) => setEditAccountData({ ...editAccountData, creditLimit: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="الحد الأقصى"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSaveEdit(account.id)}
+                        className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
+                      >
+                        <Check className="w-5 h-5 mx-auto" />
+                      </button>
+                      <button
+                        onClick={() => setEditingAccount(null)}
+                        className="flex-1 bg-gray-400 text-white py-2 rounded-lg hover:bg-gray-500"
+                      >
+                        <X className="w-5 h-5 mx-auto" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
                 <div
                   key={account.id}
                   className="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-6 border-2 border-red-200 hover:shadow-lg transition-shadow"
@@ -239,12 +535,20 @@ export default function AccountsTab({ userId }) {
                         <span className="text-sm text-red-600 font-medium">كريدت كارد</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDeleteAccount(account.id)}
-                      className="text-red-500 hover:text-red-700 transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditAccount(account)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAccount(account.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="space-y-3">
