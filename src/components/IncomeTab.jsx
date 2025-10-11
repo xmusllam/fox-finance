@@ -62,30 +62,40 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
   }, [userId]);
 
   const filterByDate = (items) => {
-    if (dateFilter === 'all') return items;
+    // ⭐ تصفية المعاملات المستقبلية فقط (اليوم وما بعده)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const futureItems = items.filter(item => {
+      const itemDate = new Date(item.date);
+      itemDate.setHours(0, 0, 0, 0);
+      return itemDate >= today;
+    });
+
+    if (dateFilter === 'all') return futureItems;
     
     const now = new Date();
     
     if (dateFilter === 'year-to-date') {
       const from = yearStart;
       const to = monthEnd;
-      return items.filter(item => {
+      return futureItems.filter(item => {
         const date = new Date(item.date);
         return date >= from && date <= to;
       });
     }
     
     if (dateFilter === 'custom') {
-      if (!customDateFrom || !customDateTo) return items;
+      if (!customDateFrom || !customDateTo) return futureItems;
       const from = new Date(customDateFrom);
       const to = new Date(customDateTo);
-      return items.filter(item => {
+      return futureItems.filter(item => {
         const date = new Date(item.date);
         return date >= from && date <= to;
       });
     }
     
-    return items.filter(item => {
+    return futureItems.filter(item => {
       const date = new Date(item.date);
       const daysDiff = (now - date) / (1000 * 60 * 60 * 24);
       
@@ -328,12 +338,14 @@ export default function IncomeTab({ userId, dateFilter, customDateFrom, customDa
 
   const groupedIncomes = categories.map(category => {
     const categoryIncomes = filteredIncomes.filter(inc => inc.category === category);
-    const total = categoryIncomes.reduce((sum, inc) => sum + inc.amount, 0);
+    // ⭐ ترتيب حسب التاريخ (الأقرب أولاً)
+    const sortedIncomes = categoryIncomes.sort((a, b) => a.date.localeCompare(b.date));
+    const total = sortedIncomes.reduce((sum, inc) => sum + inc.amount, 0);
     return {
       category,
-      incomes: categoryIncomes,
+      incomes: sortedIncomes,
       total,
-      count: categoryIncomes.length
+      count: sortedIncomes.length
     };
   }).filter(group => group.count > 0);
 
@@ -351,7 +363,7 @@ return (
       <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-emerald-100 text-lg mb-2">إجمالي الدخل</p>
+            <p className="text-emerald-100 text-lg mb-2">الدخل القادم</p>
             <p className="text-5xl font-bold">{totalIncome.toLocaleString()} ج.م</p>
             <p className="text-emerald-100 mt-2">عدد المعاملات: {filteredIncomes.length}</p>
           </div>
@@ -457,7 +469,7 @@ return (
                 value={newIncome.name}
                 onChange={(e) => setNewIncome({ ...newIncome, name: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                placeholder="مثال: راتب شهري"
+                placeholder="راتب"
               />
             </div>
 
@@ -494,7 +506,7 @@ return (
                     onChange={(e) => setNewIncome({ ...newIncome, affectsAccount: e.target.checked })}
                     className="w-5 h-5"
                   />
-                  <span className="font-medium">نعم، تسمع في حساب</span>
+                  <span className="font-medium">نـعـم</span>
                 </label>
               </div>
             </div>
