@@ -61,18 +61,49 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     };
   }, [userId]);
   const filterByDate = (items) => {
-    if (dateFilter === 'all') return items;
+    // ⭐ تصفية المعاملات المستقبلية فقط (اليوم وما بعده)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const futureItems = items.filter(item => {
+      const itemDate = new Date(item.date);
+      itemDate.setHours(0, 0, 0, 0);
+      return itemDate >= today;
+    });
+
+    if (dateFilter === 'all') return futureItems;
     
     const now = new Date();
     
     if (dateFilter === 'year-to-date') {
       const from = yearStart;
       const to = monthEnd;
-      return items.filter(item => {
+      return futureItems.filter(item => {
         const date = new Date(item.date);
         return date >= from && date <= to;
       });
     }
+    
+    if (dateFilter === 'custom') {
+      if (!customDateFrom || !customDateTo) return futureItems;
+      const from = new Date(customDateFrom);
+      const to = new Date(customDateTo);
+      return futureItems.filter(item => {
+        const date = new Date(item.date);
+        return date >= from && date <= to;
+      });
+    }
+    
+    return futureItems.filter(item => {
+      const date = new Date(item.date);
+      const daysDiff = (now - date) / (1000 * 60 * 60 * 24);
+      
+      if (dateFilter === 'week') return daysDiff <= 7;
+      if (dateFilter === 'month') return daysDiff <= 30;
+      if (dateFilter === 'year') return daysDiff <= 365;
+      return true;
+    });
+  };
     
     if (dateFilter === 'custom') {
       if (!customDateFrom || !customDateTo) return items;
@@ -339,12 +370,14 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
 
   const groupedExpenses = categories.map(category => {
     const categoryExpenses = filteredExpenses.filter(exp => exp.category === category);
-    const total = categoryExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    // ⭐ ترتيب حسب التاريخ (الأقرب أولاً)
+    const sortedExpenses = categoryExpenses.sort((a, b) => a.date.localeCompare(b.date));
+    const total = sortedExpenses.reduce((sum, exp) => sum + exp.amount, 0);
     return {
       category,
-      expenses: categoryExpenses,
+      expenses: sortedExpenses,
       total,
-      count: categoryExpenses.length
+      count: sortedExpenses.length
     };
   }).filter(group => group.count > 0);
 
@@ -360,7 +393,7 @@ return (
       <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-red-100 text-lg mb-2">إجمالي المصروفات</p>
+            <p className="text-red-100 text-lg mb-2">المصروفات القادمة</p>
             <p className="text-5xl font-bold">{totalExpenses.toLocaleString()} ج.م</p>
             <p className="text-red-100 mt-2">عدد المعاملات: {filteredExpenses.length}</p>
           </div>
@@ -466,7 +499,7 @@ return (
                 value={newExpense.name}
                 onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                placeholder="مثال: إيجار شقة"
+                placeholder="طـعـام"
               />
             </div>
 
