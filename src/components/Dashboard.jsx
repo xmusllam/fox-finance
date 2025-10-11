@@ -119,42 +119,6 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   }, [filteredIncomes, filteredExpenses]);
 
   const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#14b8a6'];
-  // ⭐ حساب الشهور القادمة (6 شهور)
-  const futureMonthsData = useMemo(() => {
-    const months = [];
-    const today = new Date();
-    
-    for (let i = 0; i < 6; i++) {
-      const monthDate = new Date(today.getFullYear(), today.getMonth() + i, 1);
-      const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
-      const monthName = monthDate.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
-      
-      // حساب الدخل القادم لهذا الشهر
-      const monthIncomes = incomes.filter(inc => {
-        const incDate = new Date(inc.date);
-        return incDate >= today && inc.date.startsWith(monthKey);
-      });
-      const totalIncome = monthIncomes.reduce((sum, inc) => sum + inc.amount, 0);
-      
-      // حساب المصروفات القادمة لهذا الشهر
-      const monthExpenses = expenses.filter(exp => {
-        const expDate = new Date(exp.date);
-        return expDate >= today && exp.date.startsWith(monthKey);
-      });
-      const totalExpenses = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-      
-      const surplus = totalIncome - totalExpenses;
-      
-      months.push({
-        month: monthName,
-        income: totalIncome,
-        expenses: totalExpenses,
-        surplus: surplus
-      });
-    }
-    
-    return months;
-  }, [incomes, expenses]);
 
   return (
     <div className="space-y-6">
@@ -165,7 +129,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-emerald-100 text-sm mb-1">الدخل القادم</p>
+              <p className="text-emerald-100 text-sm mb-1">الدخل</p>
               <p className="text-4xl font-bold">{totalIncome.toLocaleString()} ج.م</p>
             </div>
             <TrendingUp className="w-12 h-12 text-emerald-200" />
@@ -178,7 +142,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-red-100 text-sm mb-1">المصروفات القادمة</p>
+              <p className="text-red-100 text-sm mb-1">المصروفات</p>
               <p className="text-4xl font-bold">{totalExpenses.toLocaleString()} ج.م</p>
             </div>
             <TrendingDown className="w-12 h-12 text-red-200" />
@@ -279,7 +243,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           </ResponsiveContainer>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h3 className="text-xl font-bold text-gray-800 mb-6">الدخل والمصروفات</h3>
@@ -310,65 +274,6 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             </LineChart>
           </ResponsiveContainer>
         </div>
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-6">📊 توقعات الشهور القادمة</h3>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white">
-                <th className="px-4 py-3 text-right rounded-tr-lg">الشهر</th>
-                <th className="px-4 py-3 text-center">الدخل المتوقع</th>
-                <th className="px-4 py-3 text-center">المصروفات المتوقعة</th>
-                <th className="px-4 py-3 text-center rounded-tl-lg">الفائض/العجز</th>
-              </tr>
-            </thead>
-            <tbody>
-              {futureMonthsData.map((month, index) => (
-                <tr 
-                  key={index}
-                  className={`border-b hover:bg-gray-50 transition-colors ${
-                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                  }`}
-                >
-                  <td className="px-4 py-3 font-semibold text-gray-800">{month.month}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="text-emerald-600 font-bold">
-                      {month.income.toLocaleString()} ج.م
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="text-red-600 font-bold">
-                      {month.expenses.toLocaleString()} ج.م
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`font-bold ${
-                      month.surplus >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {month.surplus >= 0 ? '+' : ''}{month.surplus.toLocaleString()} ج.م
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold">
-                <td className="px-4 py-3 rounded-br-lg">الإجمالي</td>
-                <td className="px-4 py-3 text-center">
-                  {futureMonthsData.reduce((sum, m) => sum + m.income, 0).toLocaleString()} ج.م
-                </td>
-                <td className="px-4 py-3 text-center">
-                  {futureMonthsData.reduce((sum, m) => sum + m.expenses, 0).toLocaleString()} ج.م
-                </td>
-                <td className="px-4 py-3 text-center rounded-bl-lg">
-                  {futureMonthsData.reduce((sum, m) => sum + m.surplus, 0).toLocaleString()} ج.م
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-       </div>
       </div>
     </div>
   );
