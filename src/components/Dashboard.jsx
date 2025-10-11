@@ -279,7 +279,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           </ResponsiveContainer>
         </div>
       </div>
-
+      
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h3 className="text-xl font-bold text-gray-800 mb-6">الدخل والمصروفات</h3>
@@ -368,7 +368,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             </tfoot>
           </table>
         </div>
-      </div>
+       </div>
       </div>
     </div>
   );
