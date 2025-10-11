@@ -388,7 +388,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     }));
   };
 
-return (
+  return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
