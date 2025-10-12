@@ -64,10 +64,13 @@ function App() {
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wallet className="w-8 h-8" />
-            <span className="text-xl font-bold hidden md:inline">Fox Finance</span>
-          </div>
+          <button 
+  onClick={() => setActiveTab('dashboard')}
+  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+>
+  <Wallet className="w-8 h-8" />
+  <span className="text-xl font-bold hidden md:inline">Fox Finance</span>
+</button>
           <div className="text-lg font-semibold">
             مرحباً {user.displayName || user.email?.split('@')[0]}
           </div>
