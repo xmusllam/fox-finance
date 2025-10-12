@@ -309,44 +309,6 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           </div>
         </div>
       </div>
-
-      <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
-        <h3 className="text-xl font-bold text-gray-800 mb-6">رؤية السنة {currentYear}</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-3 text-right font-bold">الشهر</th>
-              <th className="p-3 text-right font-bold text-emerald-600">الدخل</th>
-              <th className="p-3 text-right font-bold text-red-600">المصروفات</th>
-              <th className="p-3 text-right font-bold text-blue-600">الفائض</th>
-            </tr>
-          </thead>
-          <tbody>
-            {yearlyOverview.map((row, idx) => (
-              <tr key={idx} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-semibold">{row.month}</td>
-                <td className="p-3 text-emerald-600">{row.income.toLocaleString()} ج.م</td>
-                <td className="p-3 text-red-600">{row.expense.toLocaleString()} ج.م</td>
-                <td className={`p-3 font-bold ${row.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                  {row.surplus.toLocaleString()} ج.م
-                </td>
-              </tr>
-            ))}
-            <tr className="bg-gray-100 font-bold">
-              <td className="p-3">الإجمالي</td>
-              <td className="p-3 text-emerald-600">
-                {yearlyOverview.reduce((s, r) => s + r.income, 0).toLocaleString()} ج.م
-              </td>
-              <td className="p-3 text-red-600">
-                {yearlyOverview.reduce((s, r) => s + r.expense, 0).toLocaleString()} ج.م
-              </td>
-              <td className="p-3 text-blue-600">
-                {yearlyOverview.reduce((s, r) => s + r.surplus, 0).toLocaleString()} ج.م
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
         
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -408,6 +370,44 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
+        <h3 className="text-xl font-bold text-gray-800 mb-6">رؤية السنة {currentYear}</h3>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-3 text-right font-bold">الشهر</th>
+              <th className="p-3 text-right font-bold text-emerald-600">الدخل</th>
+              <th className="p-3 text-right font-bold text-red-600">المصروفات</th>
+              <th className="p-3 text-right font-bold text-blue-600">الفائض</th>
+            </tr>
+          </thead>
+          <tbody>
+            {yearlyOverview.map((row, idx) => (
+              <tr key={idx} className="border-b hover:bg-gray-50">
+                <td className="p-3 font-semibold">{row.month}</td>
+                <td className="p-3 text-emerald-600">{row.income.toLocaleString()} ج.م</td>
+                <td className="p-3 text-red-600">{row.expense.toLocaleString()} ج.م</td>
+                <td className={`p-3 font-bold ${row.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {row.surplus.toLocaleString()} ج.م
+                </td>
+              </tr>
+            ))}
+            <tr className="bg-gray-100 font-bold">
+              <td className="p-3">الإجمالي</td>
+              <td className="p-3 text-emerald-600">
+                {yearlyOverview.reduce((s, r) => s + r.income, 0).toLocaleString()} ج.م
+              </td>
+              <td className="p-3 text-red-600">
+                {yearlyOverview.reduce((s, r) => s + r.expense, 0).toLocaleString()} ج.م
+              </td>
+              <td className="p-3 text-blue-600">
+                {yearlyOverview.reduce((s, r) => s + r.surplus, 0).toLocaleString()} ج.م
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
