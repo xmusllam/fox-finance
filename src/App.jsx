@@ -78,8 +78,8 @@ function App() {
       </div>
 
       {/* Date Filter */}
-      <div className="bg-white shadow-lg border-b-4 border-emerald-200 sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
+      <div className="bg-white shadow-md border-b sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-2">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
             <Calendar className="w-5 h-5 text-gray-600 hidden md:inline" />
             {filterButtons.map(btn => (
