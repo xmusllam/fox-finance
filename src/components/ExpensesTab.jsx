@@ -1,25 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PlusCircle, Trash2, Edit2, X, Check, ChevronDown, ChevronUp, TrendingDown } from 'lucide-react';
+import { PlusCircle, Trash2, Edit2, X, Check, ChevronDown, ChevronUp, TrendingDown, ArrowUp, ArrowDown } from 'lucide-react';
 
-export default function ExpensesTab({ userId, dateFilter, customDateFrom, customDateTo, yearStart, monthEnd }) {
+export default function ExpensesTab({ userId, dateFilter, customDateFrom, customDateTo, yearStart, yearEnd, today, tomorrow, yesterday }) {
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState(['إيجار', 'فواتير', 'أقساط', 'طعام', 'مواصلات', 'ترفيه', 'صحة', 'مصروفات عامة']);
   const [categoriesDocId, setCategoriesDocId] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
   
-  // التاريخ الافتراضي = اليوم
-  const today = new Date().toISOString().split('T')[0];
+  const todayStr = today.toISOString().split('T')[0];
   
   const [newExpense, setNewExpense] = useState({
     name: '',
     amount: '',
-    date: today, // ⭐ التاريخ الافتراضي
+    date: todayStr,
     category: 'مصروفات عامة',
     accountId: '',
-    affectsAccount: true, // ⭐ تسمع في حساب؟ (افتراضي: نعم)
+    affectsAccount: true,
     recurring: false,
     months: 1
   });
@@ -60,49 +59,73 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
       unsubCategories();
     };
   }, [userId]);
+
   const filterByDate = (items) => {
     if (dateFilter === 'all') return items;
     
-    const now = new Date();
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
     
-    if (dateFilter === 'year-to-date') {
-      const from = yearStart;
-      const to = monthEnd;
+    const yesterdayStart = new Date(yesterday);
+    yesterdayStart.setHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+    
+    const tomorrowStart = new Date(tomorrow);
+    tomorrowStart.setHours(0, 0, 0, 0);
+    
+    if (dateFilter === 'today') {
       return items.filter(item => {
         const date = new Date(item.date);
-        return date >= from && date <= to;
+        return date >= todayStart && date <= todayEnd;
+      });
+    }
+    
+    if (dateFilter === 'yesterday') {
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= yesterdayStart && date <= yesterdayEnd;
+      });
+    }
+    
+    if (dateFilter === 'year-to-today') {
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= yearStart && date <= todayEnd;
+      });
+    }
+    
+    if (dateFilter === 'tomorrow-to-year-end') {
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= tomorrowStart && date <= yearEnd;
       });
     }
     
     if (dateFilter === 'custom') {
       if (!customDateFrom || !customDateTo) return items;
       const from = new Date(customDateFrom);
+      from.setHours(0, 0, 0, 0);
       const to = new Date(customDateTo);
+      to.setHours(23, 59, 59, 999);
       return items.filter(item => {
         const date = new Date(item.date);
         return date >= from && date <= to;
       });
     }
     
-    return items.filter(item => {
-      const date = new Date(item.date);
-      const daysDiff = (now - date) / (1000 * 60 * 60 * 24);
-      
-      if (dateFilter === 'week') return daysDiff <= 7;
-      if (dateFilter === 'month') return daysDiff <= 30;
-      if (dateFilter === 'year') return daysDiff <= 365;
-      return true;
-    });
+    return items;
   };
 
-  // ⭐ دالة جدولة تطبيق المعاملة على الحساب
-  const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
+  // Continue in Part 2...
+const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
     const transactionDateTime = new Date(transactionDate + 'T00:00:00');
     const now = new Date();
     const delay = transactionDateTime - now;
 
     if (delay <= 0) {
-      // إذا التاريخ في الماضي أو اليوم، نفذ فورًا
       const account = accounts.find(a => a.id === accountId);
       if (account) {
         if (account.isCredit) {
@@ -116,7 +139,6 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
         }
       }
     } else {
-      // إذا في المستقبل، احفظ كـ "معاملة مجدولة"
       await addDoc(collection(db, 'scheduledTransactions'), {
         type: 'expense',
         accountId: accountId,
@@ -137,8 +159,10 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
       itemDate.setMonth(startDate.getMonth() + i);
       const dateString = itemDate.toISOString().split('T')[0];
       
+      const expenseName = newExpense.name || newExpense.category;
+      
       await addDoc(collection(db, 'expenses'), {
-        name: newExpense.name,
+        name: expenseName,
         amount: parseFloat(newExpense.amount),
         date: dateString,
         category: newExpense.category,
@@ -148,7 +172,6 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
         userId
       });
 
-      // ⭐ تطبيق على الحساب فقط إذا affectsAccount = true
       if (newExpense.affectsAccount && newExpense.accountId) {
         await scheduleAccountUpdate(newExpense.accountId, parseFloat(newExpense.amount), dateString);
       }
@@ -156,7 +179,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
   };
 
   const handleAddExpense = async () => {
-    if (!newExpense.name || !newExpense.amount || !newExpense.date) {
+    if (!newExpense.amount || !newExpense.date) {
       alert('يرجى ملء الحقول المطلوبة');
       return;
     }
@@ -170,7 +193,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     setNewExpense({
       name: '',
       amount: '',
-      date: today,
+      date: todayStr,
       category: 'مصروفات عامة',
       accountId: '',
       affectsAccount: true,
@@ -221,6 +244,30 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     }
 
     setNewCategoryName('');
+  };
+
+  const handleMoveCategoryUp = async (index) => {
+    if (index === 0) return;
+    const newCategories = [...categories];
+    [newCategories[index], newCategories[index - 1]] = [newCategories[index - 1], newCategories[index]];
+    
+    if (categoriesDocId) {
+      await updateDoc(doc(db, 'categories', categoriesDocId), {
+        categories: newCategories
+      });
+    }
+  };
+
+  const handleMoveCategoryDown = async (index) => {
+    if (index === categories.length - 1) return;
+    const newCategories = [...categories];
+    [newCategories[index], newCategories[index + 1]] = [newCategories[index + 1], newCategories[index]];
+    
+    if (categoriesDocId) {
+      await updateDoc(doc(db, 'categories', categoriesDocId), {
+        categories: newCategories
+      });
+    }
   };
 
   const handleEditCategory = async (oldName) => {
@@ -284,7 +331,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
   };
 
   const handleSaveEdit = async (expense) => {
-    if (!editExpenseData.name || !editExpenseData.amount || !editExpenseData.date) {
+    if (!editExpenseData.amount || !editExpenseData.date) {
       alert('يرجى ملء جميع الحقول');
       return;
     }
@@ -323,7 +370,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     }
 
     await updateDoc(doc(db, 'expenses', expense.id), {
-      name: editExpenseData.name,
+      name: editExpenseData.name || editExpenseData.category,
       amount: newAmount,
       date: editExpenseData.date,
       category: editExpenseData.category,
@@ -334,17 +381,19 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     setEditExpenseData({});
   };
 
-  const filteredExpenses = filterByDate(expenses);
+  // Continue in Part 3 (Return statement)...
+const filteredExpenses = filterByDate(expenses);
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + (item.amount || 0), 0);
 
   const groupedExpenses = categories.map(category => {
     const categoryExpenses = filteredExpenses.filter(exp => exp.category === category);
-    const total = categoryExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const sortedExpenses = categoryExpenses.sort((a, b) => b.date.localeCompare(a.date));
+    const total = sortedExpenses.reduce((sum, exp) => sum + exp.amount, 0);
     return {
       category,
-      expenses: categoryExpenses,
+      expenses: sortedExpenses,
       total,
-      count: categoryExpenses.length
+      count: sortedExpenses.length
     };
   }).filter(group => group.count > 0);
 
@@ -355,7 +404,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     }));
   };
 
-return (
+  return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
@@ -405,8 +454,8 @@ return (
 
             <div>
               <label className="block text-gray-700 font-semibold mb-3">الفئات الحالية</label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map(cat => (
+              <div className="space-y-2">
+                {categories.map((cat, idx) => (
                   <div key={cat} className="flex items-center gap-2 bg-white border-2 border-red-300 rounded-lg p-2">
                     {editingCategory === cat ? (
                       <>
@@ -414,7 +463,7 @@ return (
                           type="text"
                           value={editCategoryValue}
                           onChange={(e) => setEditCategoryValue(e.target.value)}
-                          className="px-2 py-1 border border-red-400 rounded w-32"
+                          className="flex-1 px-2 py-1 border border-red-400 rounded"
                           autoFocus
                         />
                         <button
@@ -432,7 +481,21 @@ return (
                       </>
                     ) : (
                       <>
-                        <span className="font-medium text-gray-700">{cat}</span>
+                        <span className="flex-1 font-medium text-gray-700">{cat}</span>
+                        <button
+                          onClick={() => handleMoveCategoryUp(idx)}
+                          disabled={idx === 0}
+                          className={`${idx === 0 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveCategoryDown(idx)}
+                          disabled={idx === categories.length - 1}
+                          className={`${idx === categories.length - 1 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => {
                             setEditingCategory(cat);
@@ -460,13 +523,12 @@ return (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 font-semibold mb-2">اسم المصروف</label>
+              <label className="block text-gray-700 font-semibold mb-2">التاريخ</label>
               <input
-                type="text"
-                value={newExpense.name}
-                onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
+                type="date"
+                value={newExpense.date}
+                onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                placeholder="مثال: إيجار شقة"
               />
             </div>
 
@@ -480,36 +542,8 @@ return (
                 placeholder="0"
               />
             </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">التاريخ</label>
-              <input
-                type="date"
-                value={newExpense.date}
-                onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">
-                ⭐ عايز المعاملة دي تسمع في حساب؟
-              </label>
-              <div className="flex items-center gap-4 h-12">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={newExpense.affectsAccount}
-                    onChange={(e) => setNewExpense({ ...newExpense, affectsAccount: e.target.checked })}
-                    className="w-5 h-5"
-                  />
-                  <span className="font-medium">نعم، تسمع في حساب</span>
-                </label>
-              </div>
-            </div>
           </div>
 
-          {/* ⭐ أزرار الفئات بدلاً من القائمة المنسدلة */}
           <div>
             <label className="block text-gray-700 font-semibold mb-2">الفئة</label>
             <div className="flex flex-wrap gap-2">
@@ -529,24 +563,54 @@ return (
             </div>
           </div>
 
-          {/* ⭐ إظهار اختيار الحساب فقط إذا affectsAccount = true */}
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">
+              ⭐ عايز المعاملة دي تسمع في حساب؟
+            </label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newExpense.affectsAccount}
+                  onChange={(e) => setNewExpense({ ...newExpense, affectsAccount: e.target.checked })}
+                  className="w-5 h-5"
+                />
+                <span className="font-medium">نعم، تسمع في حساب</span>
+              </label>
+            </div>
+          </div>
+
           {newExpense.affectsAccount && (
             <div>
               <label className="block text-gray-700 font-semibold mb-2">دفعت من</label>
-              <select
-                value={newExpense.accountId}
-                onChange={(e) => setNewExpense({ ...newExpense, accountId: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-              >
-                <option value="">اختر الحساب</option>
+              <div className="flex flex-wrap gap-2">
                 {accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.isCredit ? 'كريدت كارد' : acc.type})
-                  </option>
+                  <button
+                    key={acc.id}
+                    onClick={() => setNewExpense({ ...newExpense, accountId: acc.id })}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                      newExpense.accountId === acc.id
+                        ? 'bg-red-600 text-white shadow-lg scale-105'
+                        : 'bg-gray-100 text-gray-700 hover:bg-red-100'
+                    }`}
+                  >
+                    {acc.name}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
           )}
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">اسم المصروف (اختياري)</label>
+            <input
+              type="text"
+              value={newExpense.name}
+              onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              placeholder={`افتراضي: ${newExpense.category}`}
+            />
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
