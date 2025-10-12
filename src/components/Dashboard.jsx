@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { TrendingUp, TrendingDown, Wallet, DollarSign, Briefcase, CreditCard } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Briefcase, CreditCard, Calendar } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-export default function Dashboard({ userId, dateFilter, customDateFrom, customDateTo, yearStart, monthEnd, onNavigate }) {
+export default function Dashboard({ userId, dateFilter, customDateFrom, customDateTo, yearStart, yearEnd, today, tomorrow, yesterday, currentYear, onNavigate }) {
   const [incomes, setIncomes] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -35,36 +35,60 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const filterByDate = (items) => {
     if (dateFilter === 'all') return items;
     
-    const now = new Date();
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
     
-    if (dateFilter === 'year-to-date') {
-      const from = yearStart;
-      const to = monthEnd;
+    const yesterdayStart = new Date(yesterday);
+    yesterdayStart.setHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+    
+    const tomorrowStart = new Date(tomorrow);
+    tomorrowStart.setHours(0, 0, 0, 0);
+    
+    if (dateFilter === 'today') {
       return items.filter(item => {
         const date = new Date(item.date);
-        return date >= from && date <= to;
+        return date >= todayStart && date <= todayEnd;
+      });
+    }
+    
+    if (dateFilter === 'yesterday') {
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= yesterdayStart && date <= yesterdayEnd;
+      });
+    }
+    
+    if (dateFilter === 'year-to-today') {
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= yearStart && date <= todayEnd;
+      });
+    }
+    
+    if (dateFilter === 'tomorrow-to-year-end') {
+      return items.filter(item => {
+        const date = new Date(item.date);
+        return date >= tomorrowStart && date <= yearEnd;
       });
     }
     
     if (dateFilter === 'custom') {
       if (!customDateFrom || !customDateTo) return items;
       const from = new Date(customDateFrom);
+      from.setHours(0, 0, 0, 0);
       const to = new Date(customDateTo);
+      to.setHours(23, 59, 59, 999);
       return items.filter(item => {
         const date = new Date(item.date);
         return date >= from && date <= to;
       });
     }
     
-    return items.filter(item => {
-      const date = new Date(item.date);
-      const daysDiff = (now - date) / (1000 * 60 * 60 * 24);
-      
-      if (dateFilter === 'week') return daysDiff <= 7;
-      if (dateFilter === 'month') return daysDiff <= 30;
-      if (dateFilter === 'year') return daysDiff <= 365;
-      return true;
-    });
+    return items;
   };
 
   const filteredIncomes = filterByDate(incomes);
@@ -79,8 +103,61 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const totalAccounts = regularAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalDebts = Math.abs(creditAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance || 0), 0));
   
-  const totalCapital = totalIncome;
+  const totalCapital = totalIncome - totalExpenses;
   const netBalance = totalAccounts - totalDebts;
+  const grandTotal = totalCapital + netBalance;
+
+  // حساب ديون الكريدت كارد للشهر السابق والحالي
+  const currentMonth = today.getMonth();
+  const currentMonthYear = today.getFullYear();
+  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+  const lastMonthYear = currentMonth === 0 ? currentMonthYear - 1 : currentMonthYear;
+
+  const lastMonthExpenses = expenses.filter(exp => {
+    if (!exp.accountId) return false;
+    const account = accounts.find(a => a.id === exp.accountId);
+    if (!account?.isCredit) return false;
+    const expDate = new Date(exp.date);
+    return expDate.getMonth() === lastMonth && expDate.getFullYear() === lastMonthYear;
+  });
+
+  const currentMonthExpenses = expenses.filter(exp => {
+    if (!exp.accountId) return false;
+    const account = accounts.find(a => a.id === exp.accountId);
+    if (!account?.isCredit) return false;
+    const expDate = new Date(exp.date);
+    return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentMonthYear;
+  });
+
+  const debtDueThisMonth = lastMonthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+  const debtPostponedToNextMonth = currentMonthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+
+  // Continue in Part 2...
+// جدول رؤية السنة
+  const yearlyOverview = useMemo(() => {
+    const months = [
+      'يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+    
+    return months.map((monthName, index) => {
+      const monthIncomes = incomes.filter(inc => {
+        const date = new Date(inc.date);
+        return date.getMonth() === index && date.getFullYear() === currentYear;
+      });
+      
+      const monthExpenses = expenses.filter(exp => {
+        const date = new Date(exp.date);
+        return date.getMonth() === index && date.getFullYear() === currentYear;
+      });
+      
+      const income = monthIncomes.reduce((sum, inc) => sum + (inc.amount || 0), 0);
+      const expense = monthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+      const surplus = income - expense;
+      
+      return { month: monthName, income, expense, surplus };
+    });
+  }, [incomes, expenses, currentYear]);
 
   const categoryExpenses = useMemo(() => {
     const categories = {};
@@ -120,9 +197,11 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
 
   const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#14b8a6'];
 
+  const nextMonth = today.getMonth() === 11 ? 'يناير' : new Date(today.getFullYear(), today.getMonth() + 1).toLocaleDateString('ar-EG', { month: 'long' });
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <button
           onClick={() => onNavigate('income')}
           className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
@@ -130,32 +209,32 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           <div className="flex items-center justify-between">
             <div>
               <p className="text-emerald-100 text-sm mb-1">الدخل</p>
-              <p className="text-4xl font-bold">{totalIncome.toLocaleString()} ج.م</p>
+              <p className="text-3xl md:text-4xl font-bold">{totalIncome.toLocaleString()} ج.م</p>
             </div>
-            <TrendingUp className="w-12 h-12 text-emerald-200" />
+            <TrendingUp className="w-10 h-10 md:w-12 md:h-12 text-emerald-200" />
           </div>
         </button>
 
-<button
+        <button
           onClick={() => onNavigate('expenses')}
           className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
         >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-red-100 text-sm mb-1">المصروفات</p>
-              <p className="text-4xl font-bold">{totalExpenses.toLocaleString()} ج.م</p>
+              <p className="text-3xl md:text-4xl font-bold">{totalExpenses.toLocaleString()} ج.م</p>
             </div>
-            <TrendingDown className="w-12 h-12 text-red-200" />
+            <TrendingDown className="w-10 h-10 md:w-12 md:h-12 text-red-200" />
           </div>
         </button>
         
-        <div className={`bg-gradient-to-br ${netBalance >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-500 to-gray-600'} rounded-2xl shadow-lg p-6 text-white`}>
+        <div className={`bg-gradient-to-br ${totalCapital >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-500 to-gray-600'} rounded-2xl shadow-lg p-6 text-white`}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100 text-sm mb-1">رأس المال</p>
-              <p className="text-4xl font-bold">{(totalCapital - totalExpenses).toLocaleString()} ج.م</p>
+              <p className="text-3xl md:text-4xl font-bold">{totalCapital.toLocaleString()} ج.م</p>
             </div>
-            <Wallet className="w-12 h-12 text-blue-200" />
+            <Wallet className="w-10 h-10 md:w-12 md:h-12 text-blue-200" />
           </div>
         </div>
         
@@ -166,34 +245,95 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           <div className="flex items-center justify-between">
             <div>
               <p className="text-indigo-100 text-sm mb-1">الأرصدة</p>
-              <p className="text-4xl font-bold">{totalAccounts.toLocaleString()} ج.م</p>
+              <p className="text-3xl md:text-4xl font-bold">{totalAccounts.toLocaleString()} ج.م</p>
             </div>
-            <Briefcase className="w-12 h-12 text-indigo-200" />
+            <Briefcase className="w-10 h-10 md:w-12 md:h-12 text-indigo-200" />
           </div>
         </button>
         
         <button
           onClick={() => onNavigate('accounts')}
-          className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
+          className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-orange-100 text-sm mb-1">ديون الكريدت كارد</p>
-              <p className="text-4xl font-bold">{totalDebts.toLocaleString()} ج.م</p>
+              <p className="text-orange-100 text-sm mb-1">مطلوب سداده هذا الشهر</p>
+              <p className="text-3xl md:text-4xl font-bold">{debtDueThisMonth.toLocaleString()} ج.م</p>
             </div>
-            <CreditCard className="w-12 h-12 text-orange-200" />
+            <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-orange-200" />
+          </div>
+        </button>
+
+        <button
+          onClick={() => onNavigate('accounts')}
+          className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-yellow-100 text-sm mb-1">يؤجل حتى {nextMonth}</p>
+              <p className="text-3xl md:text-4xl font-bold">{debtPostponedToNextMonth.toLocaleString()} ج.م</p>
+            </div>
+            <Calendar className="w-10 h-10 md:w-12 md:h-12 text-yellow-200" />
           </div>
         </button>
         
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm mb-1">النهائى بعد الديون</p>
-              <p className="text-4xl font-bold">{netBalance.toLocaleString()} ج.م</p>
+              <p className="text-purple-100 text-sm mb-1">النهائي بعد الديون</p>
+              <p className="text-3xl md:text-4xl font-bold">{netBalance.toLocaleString()} ج.م</p>
             </div>
-            <DollarSign className="w-12 h-12 text-purple-200" />
+            <DollarSign className="w-10 h-10 md:w-12 md:h-12 text-purple-200" />
           </div>
         </div>
+
+        <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-teal-100 text-sm mb-1">التوتال</p>
+              <p className="text-3xl md:text-4xl font-bold">{grandTotal.toLocaleString()} ج.م</p>
+            </div>
+            <DollarSign className="w-10 h-10 md:w-12 md:h-12 text-teal-200" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
+        <h3 className="text-xl font-bold text-gray-800 mb-6">رؤية السنة {currentYear}</h3>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-3 text-right font-bold">الشهر</th>
+              <th className="p-3 text-right font-bold text-emerald-600">الدخل</th>
+              <th className="p-3 text-right font-bold text-red-600">المصروفات</th>
+              <th className="p-3 text-right font-bold text-blue-600">الفائض</th>
+            </tr>
+          </thead>
+          <tbody>
+            {yearlyOverview.map((row, idx) => (
+              <tr key={idx} className="border-b hover:bg-gray-50">
+                <td className="p-3 font-semibold">{row.month}</td>
+                <td className="p-3 text-emerald-600">{row.income.toLocaleString()} ج.م</td>
+                <td className="p-3 text-red-600">{row.expense.toLocaleString()} ج.م</td>
+                <td className={`p-3 font-bold ${row.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {row.surplus.toLocaleString()} ج.م
+                </td>
+              </tr>
+            ))}
+            <tr className="bg-gray-100 font-bold">
+              <td className="p-3">الإجمالي</td>
+              <td className="p-3 text-emerald-600">
+                {yearlyOverview.reduce((s, r) => s + r.income, 0).toLocaleString()} ج.م
+              </td>
+              <td className="p-3 text-red-600">
+                {yearlyOverview.reduce((s, r) => s + r.expense, 0).toLocaleString()} ج.م
+              </td>
+              <td className="p-3 text-blue-600">
+                {yearlyOverview.reduce((s, r) => s + r.surplus, 0).toLocaleString()} ج.م
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
         
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -201,16 +341,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           <h3 className="text-xl font-bold text-gray-800 mb-6">فئات الدخل</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie
-                data={categoryIncomes}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={(entry) => entry.name}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
+              <Pie data={categoryIncomes} cx="50%" cy="50%" labelLine={false} label={(entry) => entry.name} outerRadius={100} fill="#8884d8" dataKey="value">
                 {categoryIncomes.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -224,16 +355,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           <h3 className="text-xl font-bold text-gray-800 mb-6">فئات المصروفات</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie
-                data={categoryExpenses}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={(entry) => entry.name}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
+              <Pie data={categoryExpenses} cx="50%" cy="50%" labelLine={false} label={(entry) => entry.name} outerRadius={100} fill="#8884d8" dataKey="value">
                 {categoryExpenses.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
