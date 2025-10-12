@@ -253,6 +253,19 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         
         <button
           onClick={() => onNavigate('accounts')}
+          className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-orange-100 text-sm mb-1">ديون الكريدت كارد</p>
+              <p className="text-3xl md:text-4xl font-bold">{totalDebts.toLocaleString()} ج.م</p>
+            </div>
+            <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-orange-200" />
+          </div>
+        </button>
+        
+        <button
+          onClick={() => onNavigate('accounts')}
           className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
         >
           <div className="flex items-center justify-between">
