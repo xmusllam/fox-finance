@@ -81,21 +81,21 @@ function App() {
       <div className="bg-white shadow-md border-b sticky top-0 z-10">
         <div className="container mx-auto px-4 py-2">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-            <Calendar className="w-5 h-5 text-gray-600 hidden md:inline" />
-            {filterButtons.map(btn => (
-              <button
-                key={btn.id}
-                onClick={() => setDateFilter(btn.id)}
-                className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
-                  dateFilter === btn.id
-                    ? 'bg-emerald-600 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
-                }`}
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
+          <Calendar className="w-5 h-5 text-gray-600 hidden md:inline" />
+          {filterButtons.map(btn => (
+            <button
+              key={btn.id}
+              onClick={() => setDateFilter(btn.id)}
+              className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
+                dateFilter === btn.id
+                  ? 'bg-emerald-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
+              }`}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
           
           {dateFilter === 'custom' && (
             <div className="flex items-center gap-2 mt-3">
