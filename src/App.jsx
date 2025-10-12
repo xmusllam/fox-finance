@@ -60,7 +60,7 @@ function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-20 md:pb-0" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-24" dir="rtl">
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -163,7 +163,7 @@ function App() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-2xl border-t-2 border-gray-200 z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-2xl border-t-2 border-gray-200 z-50 h-20">
         <div className="container mx-auto px-2">
           <div className="flex justify-around items-center">
             {[
@@ -177,7 +177,7 @@ function App() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center gap-1 py-3 px-2 transition-all ${
+                className={`flex flex-col items-center gap-1 py-4 px-2 transition-all
                   activeTab === tab.id 
                     ? 'text-emerald-600' 
                     : 'text-gray-500 hover:text-emerald-600'
