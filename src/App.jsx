@@ -59,7 +59,7 @@ function App() {
               <Wallet className="w-10 h-10" />
               Fox Finance
             </h1>
-            <p className="text-emerald-100 mt-1">مرحباً {user.displayName || user.email}</p>
+            <p className="text-emerald-100 mt-1">مرحبًا {user.displayName || user.email}</p>
           </div>
           <button
             onClick={handleSignOut}
@@ -114,7 +114,7 @@ function App() {
         <div className="container mx-auto px-4">
           <div className="flex gap-2 overflow-x-auto">
             {[
-              { id: 'dashboard', label: 'لوحة التحكم', icon: FileText },
+              { id: 'dashboard', label: 'الرئيسية', icon: FileText },
               { id: 'income', label: 'الدخل', icon: TrendingUp },
               { id: 'expenses', label: 'المصروفات', icon: TrendingDown },
               { id: 'accounts', label: 'الحسابات', icon: Wallet },
