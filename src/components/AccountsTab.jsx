@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PlusCircle, Trash2, Wallet, CreditCard, AlertCircle, Edit2, X, Check, Settings, FileText, TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react';
+import { PlusCircle, Trash2, Wallet, CreditCard, AlertCircle, Edit2, X, Check, Settings, FileText, TrendingUp, TrendingDown, ArrowRightLeft, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function AccountsTab({ userId }) {
   const [accounts, setAccounts] = useState([]);
@@ -20,110 +20,10 @@ export default function AccountsTab({ userId }) {
   const [newTypeName, setNewTypeName] = useState('');
   const [editingType, setEditingType] = useState(null);
   const [editTypeValue, setEditTypeValue] = useState('');
-  // ⭐ States للمعاملات
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [accountTransactions, setAccountTransactions] = useState([]);
   const [showTransactionsModal, setShowTransactionsModal] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
-
-  // ⭐ دالة جلب المعاملات لحساب معين
-  const fetchAccountTransactions = async (accountId, accountName) => {
-    setLoadingTransactions(true);
-    setSelectedAccount({ id: accountId, name: accountName });
-    setShowTransactionsModal(true);
-
-    try {
-      const transactions = [];
-
-      // جلب الدخل
-      const incomesQuery = query(
-        collection(db, 'incomes'), 
-        where('userId', '==', userId),
-        where('accountId', '==', accountId)
-      );
-      const incomesSnapshot = await getDocs(incomesQuery);
-      incomesSnapshot.forEach(doc => {
-        const data = doc.data();
-        transactions.push({
-          id: doc.id,
-          type: 'income',
-          name: data.name,
-          amount: data.amount,
-          date: data.date,
-          category: data.category
-        });
-      });
-
-      // جلب المصروفات
-      const expensesQuery = query(
-        collection(db, 'expenses'), 
-        where('userId', '==', userId),
-        where('accountId', '==', accountId)
-      );
-      const expensesSnapshot = await getDocs(expensesQuery);
-      expensesSnapshot.forEach(doc => {
-        const data = doc.data();
-        transactions.push({
-          id: doc.id,
-          type: 'expense',
-          name: data.name,
-          amount: data.amount,
-          date: data.date,
-          category: data.category
-        });
-      });
-
-      // جلب التحويلات (من)
-      const transfersFromQuery = query(
-        collection(db, 'transfers'), 
-        where('userId', '==', userId),
-        where('fromAccountId', '==', accountId)
-      );
-      const transfersFromSnapshot = await getDocs(transfersFromQuery);
-      transfersFromSnapshot.forEach(doc => {
-        const data = doc.data();
-        const toAccount = accounts.find(a => a.id === data.toAccountId);
-        transactions.push({
-          id: doc.id,
-          type: 'transfer_out',
-          name: `تحويل إلى ${toAccount?.name || 'حساب محذوف'}`,
-          amount: data.amount,
-          date: data.date,
-          note: data.note
-        });
-      });
-
-      // جلب التحويلات (إلى)
-      const transfersToQuery = query(
-        collection(db, 'transfers'), 
-        where('userId', '==', userId),
-        where('toAccountId', '==', accountId)
-      );
-      const transfersToSnapshot = await getDocs(transfersToQuery);
-      transfersToSnapshot.forEach(doc => {
-        const data = doc.data();
-        const fromAccount = accounts.find(a => a.id === data.fromAccountId);
-        transactions.push({
-          id: doc.id,
-          type: 'transfer_in',
-          name: `تحويل من ${fromAccount?.name || 'حساب محذوف'}`,
-          amount: data.amount,
-          date: data.date,
-          note: data.note
-        });
-      });
-
-      // ترتيب المعاملات بالتاريخ (الأحدث أولاً)
-      transactions.sort((a, b) => b.date.localeCompare(a.date));
-
-      setAccountTransactions(transactions);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      alert('حدث خطأ أثناء جلب المعاملات');
-    } finally {
-      setLoadingTransactions(false);
-    }
-  };
 
   useEffect(() => {
     const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId));
@@ -146,6 +46,98 @@ export default function AccountsTab({ userId }) {
     };
   }, [userId]);
 
+  const fetchAccountTransactions = async (accountId, accountName) => {
+    setLoadingTransactions(true);
+    setSelectedAccount({ id: accountId, name: accountName });
+    setShowTransactionsModal(true);
+
+    try {
+      const transactions = [];
+
+      const incomesQuery = query(
+        collection(db, 'incomes'), 
+        where('userId', '==', userId),
+        where('accountId', '==', accountId)
+      );
+      const incomesSnapshot = await getDocs(incomesQuery);
+      incomesSnapshot.forEach(doc => {
+        const data = doc.data();
+        transactions.push({
+          id: doc.id,
+          type: 'income',
+          name: data.name,
+          amount: data.amount,
+          date: data.date,
+          category: data.category
+        });
+      });
+
+      const expensesQuery = query(
+        collection(db, 'expenses'), 
+        where('userId', '==', userId),
+        where('accountId', '==', accountId)
+      );
+      const expensesSnapshot = await getDocs(expensesQuery);
+      expensesSnapshot.forEach(doc => {
+        const data = doc.data();
+        transactions.push({
+          id: doc.id,
+          type: 'expense',
+          name: data.name,
+          amount: data.amount,
+          date: data.date,
+          category: data.category
+        });
+      });
+
+      const transfersFromQuery = query(
+        collection(db, 'transfers'), 
+        where('userId', '==', userId),
+        where('fromAccountId', '==', accountId)
+      );
+      const transfersFromSnapshot = await getDocs(transfersFromQuery);
+      transfersFromSnapshot.forEach(doc => {
+        const data = doc.data();
+        const toAccount = accounts.find(a => a.id === data.toAccountId);
+        transactions.push({
+          id: doc.id,
+          type: 'transfer_out',
+          name: `تحويل إلى ${toAccount?.name || 'حساب محذوف'}`,
+          amount: data.amount,
+          date: data.date,
+          note: data.note
+        });
+      });
+
+      const transfersToQuery = query(
+        collection(db, 'transfers'), 
+        where('userId', '==', userId),
+        where('toAccountId', '==', accountId)
+      );
+      const transfersToSnapshot = await getDocs(transfersToQuery);
+      transfersToSnapshot.forEach(doc => {
+        const data = doc.data();
+        const fromAccount = accounts.find(a => a.id === data.fromAccountId);
+        transactions.push({
+          id: doc.id,
+          type: 'transfer_in',
+          name: `تحويل من ${fromAccount?.name || 'حساب محذوف'}`,
+          amount: data.amount,
+          date: data.date,
+          note: data.note
+        });
+      });
+
+      transactions.sort((a, b) => b.date.localeCompare(a.date));
+      setAccountTransactions(transactions);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      alert('حدث خطأ أثناء جلب المعاملات');
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
   const handleAddAccount = async () => {
     if (!newAccount.name || !newAccount.balance) {
       alert('يرجى ملء جميع الحقول');
@@ -157,14 +149,15 @@ export default function AccountsTab({ userId }) {
       return;
     }
 
-  await addDoc(collection(db, 'accounts'), {
-  name: newAccount.name,
-  balance: newAccount.isCredit ? -Math.abs(parseFloat(newAccount.balance)) : parseFloat(newAccount.balance),
-  type: newAccount.type,
-  isCredit: newAccount.isCredit,
-  creditLimit: newAccount.isCredit ? parseFloat(newAccount.creditLimit) : 0,
-  userId
-});
+    await addDoc(collection(db, 'accounts'), {
+      name: newAccount.name,
+      balance: newAccount.isCredit ? -Math.abs(parseFloat(newAccount.balance)) : parseFloat(newAccount.balance),
+      type: newAccount.type,
+      isCredit: newAccount.isCredit,
+      creditLimit: newAccount.isCredit ? parseFloat(newAccount.creditLimit) : 0,
+      order: accounts.length,
+      userId
+    });
 
     setNewAccount({
       name: '',
@@ -210,7 +203,28 @@ export default function AccountsTab({ userId }) {
     }
   };
 
-  const handleAddType = async () => {
+  const handleMoveAccountUp = async (account, currentIndex) => {
+    if (currentIndex === 0) return;
+    
+    const sortedAccounts = [...accounts].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const prevAccount = sortedAccounts[currentIndex - 1];
+    
+    await updateDoc(doc(db, 'accounts', account.id), { order: currentIndex - 1 });
+    await updateDoc(doc(db, 'accounts', prevAccount.id), { order: currentIndex });
+  };
+
+  const handleMoveAccountDown = async (account, currentIndex) => {
+    const sortedAccounts = [...accounts].sort((a, b) => (a.order || 0) - (b.order || 0));
+    if (currentIndex === sortedAccounts.length - 1) return;
+    
+    const nextAccount = sortedAccounts[currentIndex + 1];
+    
+    await updateDoc(doc(db, 'accounts', account.id), { order: currentIndex + 1 });
+    await updateDoc(doc(db, 'accounts', nextAccount.id), { order: currentIndex });
+  };
+
+  // Continue in Part 2...
+const handleAddType = async () => {
     if (!newTypeName || accountTypes.includes(newTypeName)) {
       alert('النوع موجود بالفعل أو فارغ');
       return;
@@ -230,6 +244,30 @@ export default function AccountsTab({ userId }) {
     }
 
     setNewTypeName('');
+  };
+
+  const handleMoveTypeUp = async (index) => {
+    if (index === 0) return;
+    const newTypes = [...accountTypes];
+    [newTypes[index], newTypes[index - 1]] = [newTypes[index - 1], newTypes[index]];
+    
+    if (accountTypesDocId) {
+      await updateDoc(doc(db, 'accountTypes', accountTypesDocId), {
+        types: newTypes
+      });
+    }
+  };
+
+  const handleMoveTypeDown = async (index) => {
+    if (index === accountTypes.length - 1) return;
+    const newTypes = [...accountTypes];
+    [newTypes[index], newTypes[index + 1]] = [newTypes[index + 1], newTypes[index]];
+    
+    if (accountTypesDocId) {
+      await updateDoc(doc(db, 'accountTypes', accountTypesDocId), {
+        types: newTypes
+      });
+    }
   };
 
   const handleEditType = async (oldName) => {
@@ -281,13 +319,15 @@ export default function AccountsTab({ userId }) {
     }
   };
 
-  const regularAccounts = accounts.filter(acc => !acc.isCredit);
-  const creditAccounts = accounts.filter(acc => acc.isCredit);
+  const sortedAccounts = [...accounts].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const regularAccounts = sortedAccounts.filter(acc => !acc.isCredit);
+  const creditAccounts = sortedAccounts.filter(acc => acc.isCredit);
   
   const totalRegular = regularAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalCredit = creditAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
 
-  return (
+  // Continue in Part 3 (Return statement)...
+return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
@@ -326,8 +366,8 @@ export default function AccountsTab({ userId }) {
 
             <div>
               <label className="block text-gray-700 font-semibold mb-3">الأنواع الحالية</label>
-              <div className="flex flex-wrap gap-2">
-                {accountTypes.map(type => (
+              <div className="space-y-2">
+                {accountTypes.map((type, idx) => (
                   <div key={type} className="flex items-center gap-2 bg-white border-2 border-purple-300 rounded-lg p-2">
                     {editingType === type ? (
                       <>
@@ -335,7 +375,7 @@ export default function AccountsTab({ userId }) {
                           type="text"
                           value={editTypeValue}
                           onChange={(e) => setEditTypeValue(e.target.value)}
-                          className="px-2 py-1 border border-purple-400 rounded w-32"
+                          className="flex-1 px-2 py-1 border border-purple-400 rounded"
                           autoFocus
                         />
                         <button
@@ -353,7 +393,21 @@ export default function AccountsTab({ userId }) {
                       </>
                     ) : (
                       <>
-                        <span className="font-medium text-gray-700">{type}</span>
+                        <span className="flex-1 font-medium text-gray-700">{type}</span>
+                        <button
+                          onClick={() => handleMoveTypeUp(idx)}
+                          disabled={idx === 0}
+                          className={`${idx === 0 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveTypeDown(idx)}
+                          disabled={idx === accountTypes.length - 1}
+                          className={`${idx === accountTypes.length - 1 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => {
                             setEditingType(type);
@@ -488,7 +542,7 @@ export default function AccountsTab({ userId }) {
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <h3 className="text-2xl font-bold text-gray-800 p-6 border-b">الحسابات العادية</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
-            {regularAccounts.map(account => (
+            {regularAccounts.map((account, index) => (
               editingAccount === account.id ? (
                 <div key={account.id} className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 border-2 border-purple-300">
                   <div className="space-y-3">
@@ -546,7 +600,23 @@ export default function AccountsTab({ userId }) {
                         <span className="text-sm text-purple-600 font-medium">{account.type}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleMoveAccountUp(account, index)}
+                        disabled={index === 0}
+                        className={`${index === 0 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        title="تحريك لأعلى"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveAccountDown(account, index)}
+                        disabled={index === regularAccounts.length - 1}
+                        className={`${index === regularAccounts.length - 1 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        title="تحريك لأسفل"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => fetchAccountTransactions(account.id, account.name)}
                         className="text-purple-600 hover:text-purple-800"
@@ -585,7 +655,7 @@ export default function AccountsTab({ userId }) {
             بطاقات الائتمان
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
-            {creditAccounts.map(account => {
+            {creditAccounts.map((account, index) => {
               const debt = Math.abs(account.balance || 0);
               const limit = account.creditLimit || 0;
               const available = limit - debt;
@@ -646,7 +716,23 @@ export default function AccountsTab({ userId }) {
                         <span className="text-sm text-red-600 font-medium">كريدت كارد</span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleMoveAccountUp(account, index + regularAccounts.length)}
+                        disabled={index === 0}
+                        className={`${index === 0 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        title="تحريك لأعلى"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveAccountDown(account, index + regularAccounts.length)}
+                        disabled={index === creditAccounts.length - 1}
+                        className={`${index === creditAccounts.length - 1 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                        title="تحريك لأسفل"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => fetchAccountTransactions(account.id, account.name)}
                         className="text-purple-600 hover:text-purple-800"
@@ -714,11 +800,10 @@ export default function AccountsTab({ userId }) {
           </div>
         </div>
       )}
-      {/* ⭐ Modal المعاملات */}
+
       {showTransactionsModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 flex items-center justify-between">
               <div>
                 <h3 className="text-2xl font-bold">معاملات الحساب</h3>
@@ -736,7 +821,6 @@ export default function AccountsTab({ userId }) {
               </button>
             </div>
 
-            {/* Content */}
             <div className="flex-1 overflow-y-auto p-6">
               {loadingTransactions ? (
                 <div className="text-center py-12">
@@ -815,7 +899,6 @@ export default function AccountsTab({ userId }) {
               )}
             </div>
 
-            {/* Footer */}
             {!loadingTransactions && accountTransactions.length > 0 && (
               <div className="bg-gray-50 p-4 border-t">
                 <p className="text-center text-gray-600">
