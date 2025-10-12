@@ -14,14 +14,18 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [dateFilter, setDateFilter] = useState('year-to-date');
+  const [dateFilter, setDateFilter] = useState('tomorrow-to-year-end');
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
 
-  // Calculate year-to-date dates
   const today = new Date();
-  const yearStart = new Date(today.getFullYear(), 0, 1);
-  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const currentYear = today.getFullYear();
+  const yearStart = new Date(currentYear, 0, 1);
+  const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -30,10 +34,6 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
-
-  const handleSignOut = async () => {
-    await signOut(auth);
-  };
 
   if (loading) {
     return (
@@ -50,69 +50,122 @@ function App() {
     return <Auth />;
   }
 
+  const filterButtons = [
+    { id: 'custom', label: 'فترة مخصصة' },
+    { id: 'all', label: 'كل الفترات' },
+    { id: 'today', label: 'اليوم' },
+    { id: 'yesterday', label: 'أمس' },
+    { id: 'year-to-today', label: `من بداية ${currentYear} حتى اليوم` },
+    { id: 'tomorrow-to-year-end', label: `من بكرة حتى نهاية ${currentYear}` }
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-20 md:pb-0" dir="rtl">
+      {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
-        <div className="container mx-auto px-4 py-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Wallet className="w-10 h-10" />
-              Fox Finance
-            </h1>
-            <p className="text-emerald-100 mt-1">مرحبًا {user.displayName || user.email}</p>
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-8 h-8" />
+            <span className="text-xl font-bold hidden md:inline">Fox Finance</span>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            تسجيل الخروج
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white shadow-md border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <Calendar className="w-5 h-5 text-gray-600" />
-            <span className="font-semibold text-gray-700">فترة التقرير:</span>
-            <select 
-              value={dateFilter} 
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="year-to-date">من بداية السنة لنهاية الشهر الحالي</option>
-              <option value="all">كل الفترات</option>
-              <option value="week">آخر أسبوع</option>
-              <option value="month">آخر شهر</option>
-              <option value="year">آخر سنة</option>
-              <option value="custom">فترة مخصصة</option>
-            </select>
-            
-            {dateFilter === 'custom' && (
-              <>
-                <input 
-                  type="date" 
-                  value={customDateFrom}
-                  onChange={(e) => setCustomDateFrom(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <span className="text-gray-600">إلى</span>
-                <input 
-                  type="date" 
-                  value={customDateTo}
-                  onChange={(e) => setCustomDateTo(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-              </>
-            )}
+          <div className="text-lg font-semibold">
+            مرحباً {user.displayName || user.email?.split('@')[0]}
           </div>
         </div>
       </div>
 
-      <div className="bg-white shadow-md">
-        <div className="container mx-auto px-4">
-          <div className="flex gap-2 overflow-x-auto">
+      {/* Date Filter */}
+      <div className="bg-white shadow-md border-b sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Calendar className="w-5 h-5 text-gray-600 hidden md:inline" />
+            {filterButtons.map(btn => (
+              <button
+                key={btn.id}
+                onClick={() => setDateFilter(btn.id)}
+                className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
+                  dateFilter === btn.id
+                    ? 'bg-emerald-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+          
+          {dateFilter === 'custom' && (
+            <div className="flex items-center gap-2 mt-3">
+              <input 
+                type="date" 
+                value={customDateFrom}
+                onChange={(e) => setCustomDateFrom(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+              <span className="text-gray-600 text-sm">إلى</span>
+              <input 
+                type="date" 
+                value={customDateTo}
+                onChange={(e) => setCustomDateTo(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-6">
+        {activeTab === 'dashboard' && (
+          <Dashboard 
+            userId={user.uid} 
+            dateFilter={dateFilter}
+            customDateFrom={customDateFrom}
+            customDateTo={customDateTo}
+            yearStart={yearStart}
+            yearEnd={yearEnd}
+            today={today}
+            tomorrow={tomorrow}
+            yesterday={yesterday}
+            currentYear={currentYear}
+            onNavigate={setActiveTab}
+          />
+        )}
+        {activeTab === 'income' && (
+          <IncomeTab 
+            userId={user.uid}
+            dateFilter={dateFilter}
+            customDateFrom={customDateFrom}
+            customDateTo={customDateTo}
+            yearStart={yearStart}
+            yearEnd={yearEnd}
+            today={today}
+            tomorrow={tomorrow}
+            yesterday={yesterday}
+          />
+        )}
+        {activeTab === 'expenses' && (
+          <ExpensesTab 
+            userId={user.uid}
+            dateFilter={dateFilter}
+            customDateFrom={customDateFrom}
+            customDateTo={customDateTo}
+            yearStart={yearStart}
+            yearEnd={yearEnd}
+            today={today}
+            tomorrow={tomorrow}
+            yesterday={yesterday}
+          />
+        )}
+        {activeTab === 'accounts' && <AccountsTab userId={user.uid} />}
+        {activeTab === 'account' && <AccountTab user={user} />}
+        {activeTab === 'transfers' && <TransfersTab userId={user.uid} />}
+      </div>
+
+      {/* Bottom Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-2xl border-t-2 border-gray-200 z-50">
+        <div className="container mx-auto px-2">
+          <div className="flex justify-around items-center">
             {[
               { id: 'dashboard', label: 'الرئيسية', icon: FileText },
               { id: 'income', label: 'الدخل', icon: TrendingUp },
@@ -124,55 +177,18 @@ function App() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all border-b-4 whitespace-nowrap ${
+                className={`flex flex-col items-center gap-1 py-3 px-2 transition-all ${
                   activeTab === tab.id 
-                    ? 'border-emerald-600 text-emerald-600 bg-emerald-50' 
-                    : 'border-transparent text-gray-600 hover:bg-gray-50'
+                    ? 'text-emerald-600' 
+                    : 'text-gray-500 hover:text-emerald-600'
                 }`}
               >
-                <tab.icon className="w-5 h-5" />
-                {tab.label}
+                <tab.icon className={`w-6 h-6 ${activeTab === tab.id ? 'scale-110' : ''}`} />
+                <span className="text-xs font-semibold hidden md:inline">{tab.label}</span>
               </button>
             ))}
           </div>
         </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8">
-        {activeTab === 'dashboard' && (
-  <Dashboard 
-            userId={user.uid} 
-            dateFilter={dateFilter}
-            customDateFrom={customDateFrom}
-            customDateTo={customDateTo}
-            yearStart={yearStart}
-            monthEnd={monthEnd}
-            onNavigate={setActiveTab}
-          />
-        )}
-        {activeTab === 'income' && (
-          <IncomeTab 
-            userId={user.uid}
-            dateFilter={dateFilter}
-            customDateFrom={customDateFrom}
-            customDateTo={customDateTo}
-            yearStart={yearStart}
-            monthEnd={monthEnd}
-          />
-        )}
-        {activeTab === 'expenses' && (
-          <ExpensesTab 
-            userId={user.uid}
-            dateFilter={dateFilter}
-            customDateFrom={customDateFrom}
-            customDateTo={customDateTo}
-            yearStart={yearStart}
-            monthEnd={monthEnd}
-          />
-        )}
-        {activeTab === 'accounts' && <AccountsTab userId={user.uid} />}
-        {activeTab === 'account' && <AccountTab user={user} />}
-        {activeTab === 'transfers' && <TransfersTab userId={user.uid} />}
       </div>
     </div>
   );
