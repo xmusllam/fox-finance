@@ -584,7 +584,7 @@ const filteredExpenses = filterByDate(expenses);
             <div>
               <label className="block text-gray-700 font-semibold mb-2">دفعت من</label>
               <div className="flex flex-wrap gap-2">
-                {accounts.map(acc => (
+                {accounts.sort((a, b) => (a.order || 0) - (b.order || 0)).map(acc => (
                   <button
                     key={acc.id}
                     onClick={() => setNewExpense({ ...newExpense, accountId: acc.id })}
@@ -723,7 +723,7 @@ const filteredExpenses = filterByDate(expenses);
                               onChange={(e) => setEditExpenseData({ ...editExpenseData, accountId: e.target.value })}
                               className="px-2 py-1 border rounded"
                             >
-                              {accounts.map(acc => (
+                              {accounts.sort((a, b) => (a.order || 0) - (b.order || 0)).map(acc => (
                                 <option key={acc.id} value={acc.id}>{acc.name}</option>
                               ))}
                             </select>
