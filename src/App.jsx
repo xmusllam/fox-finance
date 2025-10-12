@@ -51,12 +51,12 @@ function App() {
   }
 
   const filterButtons = [
-    { id: 'custom', label: 'فترة مخصصة' },
-    { id: 'all', label: 'كل الفترات' },
+    { id: 'all', label: 'كل' },
+    { id: 'custom', label: 'مخصص' },
     { id: 'today', label: 'اليوم' },
     { id: 'yesterday', label: 'أمس' },
-    { id: 'year-to-today', label: `من بداية ${currentYear} حتى اليوم` },
-    { id: 'tomorrow-to-year-end', label: `من بكرة حتى نهاية ${currentYear}` }
+    { id: 'year-to-today', label: `من بداية ${currentYear} لليوم` },
+    { id: 'tomorrow-to-year-end', label: `غدًا حتى نهاية ${currentYear}` }
   ];
 
   return (
