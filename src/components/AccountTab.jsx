@@ -288,9 +288,6 @@ export default function AccountTab({ user }) {
             <div className="flex gap-3">
               <button
                 onClick={handleResetData}
-                className="flex-1 bg-red-
-              <button
-                onClick={handleResetData}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold"
               >
                 تأكيد الحذف
