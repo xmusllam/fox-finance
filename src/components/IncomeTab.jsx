@@ -392,7 +392,9 @@ const filteredIncomes = filterByDate(incomes);
     }));
   };
 
-  const regularAccounts = accounts.filter(acc => !acc.isCredit);
+  const regularAccounts = accounts
+  .filter(acc => !acc.isCredit)
+  .sort((a, b) => (a.order || 0) - (b.order || 0));
 
   return (
     <div className="space-y-6">
