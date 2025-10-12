@@ -79,14 +79,14 @@ function App() {
 
       {/* Date Filter */}
       <div className="bg-white shadow-md border-b sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-2">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-          <Calendar className="w-5 h-5 text-gray-600 hidden md:inline" />
-          {filterButtons.map(btn => (
+        <div className="container mx-auto px-4 py-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2 pb-2" style={{ minWidth: 'max-content' }}>
+            <Calendar className="w-5 h-5 text-gray-600 hidden md:inline flex-shrink-0" />
+            {filterButtons.map(btn => (
             <button
               key={btn.id}
               onClick={() => setDateFilter(btn.id)}
-              className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
+              className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all flex-shrink-0 ${
                 dateFilter === btn.id
                   ? 'bg-emerald-600 text-white shadow-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
