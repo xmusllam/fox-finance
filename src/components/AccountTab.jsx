@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider, signOut } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { auth, db, storage } from '../firebase';
-import { User, Lock, Image, Trash2, AlertTriangle } from 'lucide-react';
+import { User, Lock, Image, Trash2, AlertTriangle, LogOut } from 'lucide-react';
 
 export default function AccountTab({ user }) {
   const [displayName, setDisplayName] = useState(user.displayName || '');
@@ -23,6 +23,12 @@ export default function AccountTab({ user }) {
   const showMessage = (type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
+  };
+
+  const handleSignOut = async () => {
+    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+      await signOut(auth);
+    }
   };
 
   const handleUpdateProfile = async () => {
@@ -239,13 +245,22 @@ export default function AccountTab({ user }) {
           منطقة الخطر
         </h3>
         <p className="text-red-700 mb-4">حذف البيانات لا يمكن التراجع عنه!</p>
-        <button
-          onClick={() => setShowResetDialog(true)}
-          className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2"
-        >
-          <Trash2 className="w-5 h-5" />
-          حذف البيانات
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setShowResetDialog(true)}
+            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2"
+          >
+            <Trash2 className="w-5 h-5" />
+            حذف البيانات
+          </button>
+          <button
+            onClick={handleSignOut}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2"
+          >
+            <LogOut className="w-5 h-5" />
+            تسجيل الخروج
+          </button>
+        </div>
       </div>
 
       {showResetDialog && (
@@ -271,6 +286,9 @@ export default function AccountTab({ user }) {
               ))}
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={handleResetData}
+                className="flex-1 bg-red-
               <button
                 onClick={handleResetData}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold"
