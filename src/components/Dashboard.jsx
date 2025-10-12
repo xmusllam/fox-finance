@@ -132,7 +132,65 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const debtDueThisMonth = lastMonthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
   const debtPostponedToNextMonth = currentMonthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
 
+  // جدول رؤية السنة
+  const yearlyOverview = useMemo(() => {
+    const months = [
+      'يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
     
+    return months.map((monthName, index) => {
+      const monthIncomes = incomes.filter(inc => {
+        const date = new Date(inc.date);
+        return date.getMonth() === index && date.getFullYear() === currentYear;
+      });
+      
+      const monthExpenses = expenses.filter(exp => {
+        const date = new Date(exp.date);
+        return date.getMonth() === index && date.getFullYear() === currentYear;
+      });
+      
+      const income = monthIncomes.reduce((sum, inc) => sum + (inc.amount || 0), 0);
+      const expense = monthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+      const surplus = income - expense;
+      
+      return { month: monthName, income, expense, surplus };
+    });
+  }, [incomes, expenses, currentYear]);
+
+  const categoryExpenses = useMemo(() => {
+    const categories = {};
+    filteredExpenses.forEach(exp => {
+      categories[exp.category] = (categories[exp.category] || 0) + exp.amount;
+    });
+    return Object.entries(categories).map(([name, value]) => ({ name, value }));
+  }, [filteredExpenses]);
+
+  const categoryIncomes = useMemo(() => {
+    const categories = {};
+    filteredIncomes.forEach(inc => {
+      categories[inc.category] = (categories[inc.category] || 0) + inc.amount;
+    });
+    return Object.entries(categories).map(([name, value]) => ({ name, value }));
+  }, [filteredIncomes]);
+
+  const monthlyData = useMemo(() => {
+    const months = {};
+    [...filteredIncomes, ...filteredExpenses].forEach(item => {
+      const month = item.date?.substring(0, 7);
+      if (month && !months[month]) months[month] = { month, income: 0, expenses: 0 };
+    });
+    
+    filteredIncomes.forEach(item => {
+      const month = item.date?.substring(0, 7);
+      if (month && months[month]) months[month].income += item.amount;
+    });
+    
+    filteredExpenses.forEach(item => {
+      const month = item.date?.substring(0, 7);
+      if (month && months[month]) months[month].expenses += item.amount;
+    });
+  
     return Object.values(months).sort((a, b) => a.month.localeCompare(b.month));
   }, [filteredIncomes, filteredExpenses]);
 
