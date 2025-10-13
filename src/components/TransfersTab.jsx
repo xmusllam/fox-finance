@@ -7,14 +7,13 @@ export default function TransfersTab({ userId }) {
   const [transfers, setTransfers] = useState([]);
   const [accounts, setAccounts] = useState([]);
   
-  // التاريخ الافتراضي = اليوم
   const today = new Date().toISOString().split('T')[0];
   
   const [newTransfer, setNewTransfer] = useState({
     fromAccountId: '',
     toAccountId: '',
     amount: '',
-    date: today, // ⭐ التعديل: التاريخ الافتراضي
+    date: today,
     note: ''
   });
 
@@ -55,7 +54,6 @@ export default function TransfersTab({ userId }) {
       return;
     }
 
-    // Check if from account has enough balance (except credit cards)
     if (!fromAccount.isCredit && fromAccount.balance < amount) {
       alert('الرصيد غير كافي في الحساب المحول منه!');
       return;
@@ -63,12 +61,10 @@ export default function TransfersTab({ userId }) {
 
     // Update from account
     if (fromAccount.isCredit) {
-      // Credit card: increase debt (more negative)
       await updateDoc(doc(db, 'accounts', fromAccount.id), {
         balance: (fromAccount.balance || 0) - amount
       });
     } else {
-      // Regular account: decrease balance
       await updateDoc(doc(db, 'accounts', fromAccount.id), {
         balance: (fromAccount.balance || 0) - amount
       });
@@ -76,18 +72,41 @@ export default function TransfersTab({ userId }) {
 
     // Update to account
     if (toAccount.isCredit) {
-      // Credit card: decrease debt (less negative = payment)
+      let lastMonthDebt = toAccount.lastMonthDebt || 0;
+      let currentMonthDebt = toAccount.currentMonthDebt || 0;
+      let remainingPayment = amount;
+
+      if (lastMonthDebt > 0) {
+        if (remainingPayment >= lastMonthDebt) {
+          remainingPayment -= lastMonthDebt;
+          lastMonthDebt = 0;
+        } else {
+          lastMonthDebt -= remainingPayment;
+          remainingPayment = 0;
+        }
+      }
+
+      if (remainingPayment > 0 && currentMonthDebt > 0) {
+        if (remainingPayment >= currentMonthDebt) {
+          remainingPayment -= currentMonthDebt;
+          currentMonthDebt = 0;
+        } else {
+          currentMonthDebt -= remainingPayment;
+          remainingPayment = 0;
+        }
+      }
+
       await updateDoc(doc(db, 'accounts', toAccount.id), {
-        balance: (toAccount.balance || 0) + amount
+        balance: (toAccount.balance || 0) + amount,
+        lastMonthDebt: lastMonthDebt,
+        currentMonthDebt: currentMonthDebt
       });
     } else {
-      // Regular account: increase balance
       await updateDoc(doc(db, 'accounts', toAccount.id), {
         balance: (toAccount.balance || 0) + amount
       });
     }
 
-    // Record transfer
     await addDoc(collection(db, 'transfers'), {
       fromAccountId: newTransfer.fromAccountId,
       toAccountId: newTransfer.toAccountId,
@@ -101,7 +120,7 @@ export default function TransfersTab({ userId }) {
       fromAccountId: '',
       toAccountId: '',
       amount: '',
-      date: today, // ⭐ إعادة تعيين التاريخ لليوم الحالي
+      date: today,
       note: ''
     });
 
@@ -121,9 +140,36 @@ export default function TransfersTab({ userId }) {
     }
 
     if (toAccount) {
-      await updateDoc(doc(db, 'accounts', toAccount.id), {
-        balance: (toAccount.balance || 0) - transfer.amount
-      });
+      if (toAccount.isCredit) {
+        let lastMonthDebt = toAccount.lastMonthDebt || 0;
+        let currentMonthDebt = toAccount.currentMonthDebt || 0;
+        let remainingAmount = transfer.amount;
+
+        if (currentMonthDebt < (toAccount.currentMonthDebt || 0)) {
+          const paidFromCurrent = (toAccount.currentMonthDebt || 0) - currentMonthDebt;
+          if (remainingAmount <= paidFromCurrent) {
+            currentMonthDebt += remainingAmount;
+            remainingAmount = 0;
+          } else {
+            currentMonthDebt = toAccount.currentMonthDebt || 0;
+            remainingAmount -= paidFromCurrent;
+          }
+        }
+
+        if (remainingAmount > 0) {
+          lastMonthDebt += remainingAmount;
+        }
+
+        await updateDoc(doc(db, 'accounts', toAccount.id), {
+          balance: (toAccount.balance || 0) - transfer.amount,
+          lastMonthDebt: lastMonthDebt,
+          currentMonthDebt: currentMonthDebt
+        });
+      } else {
+        await updateDoc(doc(db, 'accounts', toAccount.id), {
+          balance: (toAccount.balance || 0) - transfer.amount
+        });
+      }
     }
 
     await deleteDoc(doc(db, 'transfers', transfer.id));
@@ -135,7 +181,6 @@ export default function TransfersTab({ userId }) {
   };
 
   const sortedTransfers = [...transfers].sort((a, b) => b.date.localeCompare(a.date));
-
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-lg p-8 text-white">
