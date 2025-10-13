@@ -273,7 +273,7 @@ creditAccounts.forEach(account => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-red-100 text-sm mb-1">مديونية {currentMonth}</p>
+              <p className="text-red-100 text-sm mb-1">مديونية</p>
               <p className="text-3xl md:text-4xl font-bold">{debtDueThisMonth.toLocaleString()} ج.م</p>
             </div>
             <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-red-200" />
