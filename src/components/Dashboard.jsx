@@ -114,35 +114,14 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const netBalance = totalAccounts - totalDebts;
   const grandTotal = totalCapital + netBalance;
 
-  // حساب ديون الكريدت كارد بعد خصم التحويلات
-  let totalLastMonthDebt = 0;
-  let totalCurrentMonthDebt = 0;
+  // حساب ديون الكريدت كارد مباشرة من الحسابات
+let totalLastMonthDebt = 0;
+let totalCurrentMonthDebt = 0;
 
-  creditAccounts.forEach(account => {
-    let accountLastMonthDebt = account.lastMonthDebt || 0;
-    let accountCurrentMonthDebt = account.currentMonthDebt || 0;
-    
-    // نطرح التحويلات (السداد) اللي راحت لهذا الحساب
-    const paymentsToThisAccount = transfers
-      .filter(t => t.toAccountId === account.id)
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
-    
-    // نخصم من الشهر الماضي أولاً
-    if (paymentsToThisAccount > 0) {
-      if (paymentsToThisAccount >= accountLastMonthDebt) {
-        // السداد أكبر من أو يساوي دين الشهر الماضي
-        const remaining = paymentsToThisAccount - accountLastMonthDebt;
-        accountLastMonthDebt = 0;
-        accountCurrentMonthDebt = Math.max(0, accountCurrentMonthDebt - remaining);
-      } else {
-        // السداد أقل من دين الشهر الماضي
-        accountLastMonthDebt -= paymentsToThisAccount;
-      }
-    }
-    
-    totalLastMonthDebt += accountLastMonthDebt;
-    totalCurrentMonthDebt += accountCurrentMonthDebt;
-  });
+creditAccounts.forEach(account => {
+  totalLastMonthDebt += account.lastMonthDebt || 0;
+  totalCurrentMonthDebt += account.currentMonthDebt || 0;
+});
 
   const debtDueThisMonth = totalLastMonthDebt;
   const debtPostponedToNextMonth = totalCurrentMonthDebt;
