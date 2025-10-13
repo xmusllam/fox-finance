@@ -12,7 +12,10 @@ export default function AccountsTab({ userId }) {
     balance: '',
     type: 'بنك',
     isCredit: false,
-    creditLimit: ''
+    creditLimit: '',
+    debtMonth: '',
+    lastMonthDebt: 0,
+    currentMonthDebt: 0
   });
   const [editingAccount, setEditingAccount] = useState(null);
   const [editAccountData, setEditAccountData] = useState({});
@@ -24,6 +27,16 @@ export default function AccountsTab({ userId }) {
   const [accountTransactions, setAccountTransactions] = useState([]);
   const [showTransactionsModal, setShowTransactionsModal] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+  // دالة لجلب اسم الشهر
+  const getMonthName = (monthOffset = 0) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() + monthOffset);
+    return date.toLocaleDateString('ar-EG', { month: 'long' });
+  };
+
+  const lastMonthName = getMonthName(-1);
+  const currentMonthName = getMonthName(0);
 
   useEffect(() => {
     const accountsQuery = query(collection(db, 'accounts'), where('userId', '==', userId));
@@ -138,7 +151,8 @@ export default function AccountsTab({ userId }) {
     }
   };
 
-  const handleAddAccount = async () => {
+  // Continue in Part 2...
+const handleAddAccount = async () => {
     if (!newAccount.name || !newAccount.balance) {
       alert('يرجى ملء جميع الحقول');
       return;
@@ -149,12 +163,50 @@ export default function AccountsTab({ userId }) {
       return;
     }
 
+    // التحقق من اختيار الشهر للدين
+    if (newAccount.isCredit && parseFloat(newAccount.balance) > 0) {
+      if (!newAccount.debtMonth) {
+        alert('يرجى تحديد لأي شهر تنتمي المديونية');
+        return;
+      }
+      
+      if (newAccount.debtMonth === 'split') {
+        const lastDebt = parseFloat(newAccount.lastMonthDebt) || 0;
+        const currentDebt = parseFloat(newAccount.currentMonthDebt) || 0;
+        const totalDebt = parseFloat(newAccount.balance);
+        
+        if (lastDebt + currentDebt !== totalDebt) {
+          alert(`مجموع التقسيم (${lastDebt + currentDebt}ج) يجب أن يساوي الدَين الكلي (${totalDebt}ج)`);
+          return;
+        }
+      }
+    }
+
+    // حساب الديون حسب الشهر
+    let lastMonthDebt = 0;
+    let currentMonthDebt = 0;
+    
+    if (newAccount.isCredit && parseFloat(newAccount.balance) > 0) {
+      const totalDebt = parseFloat(newAccount.balance);
+      
+      if (newAccount.debtMonth === 'last') {
+        lastMonthDebt = totalDebt;
+      } else if (newAccount.debtMonth === 'current') {
+        currentMonthDebt = totalDebt;
+      } else if (newAccount.debtMonth === 'split') {
+        lastMonthDebt = parseFloat(newAccount.lastMonthDebt) || 0;
+        currentMonthDebt = parseFloat(newAccount.currentMonthDebt) || 0;
+      }
+    }
+
     await addDoc(collection(db, 'accounts'), {
       name: newAccount.name,
       balance: newAccount.isCredit ? -Math.abs(parseFloat(newAccount.balance)) : parseFloat(newAccount.balance),
       type: newAccount.type,
       isCredit: newAccount.isCredit,
       creditLimit: newAccount.isCredit ? parseFloat(newAccount.creditLimit) : 0,
+      lastMonthDebt: lastMonthDebt,
+      currentMonthDebt: currentMonthDebt,
       order: accounts.length,
       userId
     });
@@ -164,17 +216,39 @@ export default function AccountsTab({ userId }) {
       balance: '',
       type: 'بنك',
       isCredit: false,
-      creditLimit: ''
+      creditLimit: '',
+      debtMonth: '',
+      lastMonthDebt: 0,
+      currentMonthDebt: 0
     });
   };
 
   const handleEditAccount = (account) => {
     setEditingAccount(account.id);
+    
+    // حساب debtMonth من البيانات الموجودة
+    let debtMonth = '';
+    if (account.isCredit) {
+      const lastDebt = account.lastMonthDebt || 0;
+      const currentDebt = account.currentMonthDebt || 0;
+      
+      if (lastDebt > 0 && currentDebt === 0) {
+        debtMonth = 'last';
+      } else if (currentDebt > 0 && lastDebt === 0) {
+        debtMonth = 'current';
+      } else if (lastDebt > 0 && currentDebt > 0) {
+        debtMonth = 'split';
+      }
+    }
+    
     setEditAccountData({
       name: account.name,
       balance: account.balance,
       type: account.type,
-      creditLimit: account.creditLimit || 0
+      creditLimit: account.creditLimit || 0,
+      debtMonth: debtMonth,
+      lastMonthDebt: account.lastMonthDebt || 0,
+      currentMonthDebt: account.currentMonthDebt || 0
     });
   };
 
@@ -186,11 +260,40 @@ export default function AccountsTab({ userId }) {
 
     const account = accounts.find(a => a.id === accountId);
     
+    // حساب الديون للكريدت كارد
+    let lastMonthDebt = 0;
+    let currentMonthDebt = 0;
+    
+    if (account.isCredit && Math.abs(parseFloat(editAccountData.balance)) > 0) {
+      if (!editAccountData.debtMonth) {
+        alert('يرجى تحديد لأي شهر تنتمي المديونية');
+        return;
+      }
+      
+      const totalDebt = Math.abs(parseFloat(editAccountData.balance));
+      
+      if (editAccountData.debtMonth === 'last') {
+        lastMonthDebt = totalDebt;
+      } else if (editAccountData.debtMonth === 'current') {
+        currentMonthDebt = totalDebt;
+      } else if (editAccountData.debtMonth === 'split') {
+        lastMonthDebt = parseFloat(editAccountData.lastMonthDebt) || 0;
+        currentMonthDebt = parseFloat(editAccountData.currentMonthDebt) || 0;
+        
+        if (lastMonthDebt + currentMonthDebt !== totalDebt) {
+          alert(`مجموع التقسيم (${lastMonthDebt + currentMonthDebt}ج) يجب أن يساوي الدَين الكلي (${totalDebt}ج)`);
+          return;
+        }
+      }
+    }
+    
     await updateDoc(doc(db, 'accounts', accountId), {
       name: editAccountData.name,
       balance: parseFloat(editAccountData.balance),
       type: editAccountData.type,
-      creditLimit: account.isCredit ? parseFloat(editAccountData.creditLimit) : 0
+      creditLimit: account.isCredit ? parseFloat(editAccountData.creditLimit) : 0,
+      lastMonthDebt: lastMonthDebt,
+      currentMonthDebt: currentMonthDebt
     });
 
     setEditingAccount(null);
@@ -223,8 +326,7 @@ export default function AccountsTab({ userId }) {
     await updateDoc(doc(db, 'accounts', nextAccount.id), { order: currentIndex });
   };
 
-  // Continue in Part 2...
-const handleAddType = async () => {
+  const handleAddType = async () => {
     if (!newTypeName || accountTypes.includes(newTypeName)) {
       alert('النوع موجود بالفعل أو فارغ');
       return;
@@ -326,7 +428,7 @@ const handleAddType = async () => {
   const totalRegular = regularAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalCredit = creditAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
 
-  // Continue in Part 3 (Return statement)...
+  // Continue in Part 3...
 return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -512,6 +614,87 @@ return (
             </button>
           </div>
         </div>
+
+        {newAccount.isCredit && parseFloat(newAccount.balance) > 0 && (
+          <div className="mt-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+            <label className="block text-gray-700 font-semibold mb-3">
+              لأي شهر تنتمي هذه المديونية؟ *
+            </label>
+            
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 p-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="radio"
+                  name="debtMonth"
+                  value="last"
+                  checked={newAccount.debtMonth === 'last'}
+                  onChange={(e) => setNewAccount({ ...newAccount, debtMonth: e.target.value })}
+                  className="w-4 h-4"
+                />
+                <span className="font-medium">شهر {lastMonthName} (مطلوب سداده حالاً)</span>
+              </label>
+              
+              <label className="flex items-center gap-2 p-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="radio"
+                  name="debtMonth"
+                  value="current"
+                  checked={newAccount.debtMonth === 'current'}
+                  onChange={(e) => setNewAccount({ ...newAccount, debtMonth: e.target.value })}
+                  className="w-4 h-4"
+                />
+                <span className="font-medium">شهر {currentMonthName} (يؤجل للشهر القادم)</span>
+              </label>
+              
+              <label className="flex items-start gap-2 p-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="radio"
+                  name="debtMonth"
+                  value="split"
+                  checked={newAccount.debtMonth === 'split'}
+                  onChange={(e) => setNewAccount({ ...newAccount, debtMonth: e.target.value })}
+                  className="w-4 h-4 mt-1"
+                />
+                <div className="flex-1">
+                  <span className="font-medium block mb-2">تقسيم المديونية:</span>
+                  {newAccount.debtMonth === 'split' && (
+                    <div className="space-y-2 mt-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 w-32">من {lastMonthName}:</label>
+                        <input
+                          type="number"
+                          value={newAccount.lastMonthDebt}
+                          onChange={(e) => setNewAccount({ ...newAccount, lastMonthDebt: e.target.value })}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                          placeholder="0"
+                          min="0"
+                        />
+                        <span className="text-gray-600">ج.م</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 w-32">من {currentMonthName}:</label>
+                        <input
+                          type="number"
+                          value={newAccount.currentMonthDebt}
+                          onChange={(e) => setNewAccount({ ...newAccount, currentMonthDebt: e.target.value })}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                          placeholder="0"
+                          min="0"
+                        />
+                        <span className="text-gray-600">ج.م</span>
+                      </div>
+                      <div className="text-sm text-gray-600 bg-white p-2 rounded">
+                        المجموع: {((parseFloat(newAccount.lastMonthDebt) || 0) + (parseFloat(newAccount.currentMonthDebt) || 0)).toLocaleString()} ج.م
+                        {' / '}
+                        الدَين الكلي: {parseFloat(newAccount.balance).toLocaleString()} ج.م
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -647,7 +830,6 @@ return (
           </div>
         </div>
       )}
-
       {creditAccounts.length > 0 && (
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <h3 className="text-2xl font-bold text-gray-800 p-6 border-b flex items-center gap-2">
@@ -685,6 +867,68 @@ return (
                       className="w-full px-3 py-2 border rounded-lg"
                       placeholder="الحد الأقصى"
                     />
+                    
+                    {Math.abs(parseFloat(editAccountData.balance)) > 0 && (
+                      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-3">
+                        <label className="block text-sm font-semibold mb-2">لأي شهر تنتمي المديونية؟</label>
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name={`debtMonth-${account.id}`}
+                              value="last"
+                              checked={editAccountData.debtMonth === 'last'}
+                              onChange={(e) => setEditAccountData({ ...editAccountData, debtMonth: e.target.value })}
+                              className="w-3 h-3"
+                            />
+                            {lastMonthName}
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name={`debtMonth-${account.id}`}
+                              value="current"
+                              checked={editAccountData.debtMonth === 'current'}
+                              onChange={(e) => setEditAccountData({ ...editAccountData, debtMonth: e.target.value })}
+                              className="w-3 h-3"
+                            />
+                            {currentMonthName}
+                          </label>
+                          <label className="flex flex-col gap-1 text-sm">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name={`debtMonth-${account.id}`}
+                                value="split"
+                                checked={editAccountData.debtMonth === 'split'}
+                                onChange={(e) => setEditAccountData({ ...editAccountData, debtMonth: e.target.value })}
+                                className="w-3 h-3"
+                              />
+                              تقسيم
+                            </div>
+                            {editAccountData.debtMonth === 'split' && (
+                              <div className="mr-5 space-y-1">
+                                <input
+                                  type="number"
+                                  value={editAccountData.lastMonthDebt}
+                                  onChange={(e) => setEditAccountData({ ...editAccountData, lastMonthDebt: e.target.value })}
+                                  className="w-full px-2 py-1 border rounded text-sm"
+                                  placeholder={lastMonthName}
+                                />
+                                <input
+                                  type="number"
+                                  value={editAccountData.currentMonthDebt}
+                                  onChange={(e) => setEditAccountData({ ...editAccountData, currentMonthDebt: e.target.value })}
+                                  className="w-full px-2 py-1 border rounded text-sm"
+                                  placeholder={currentMonthName}
+                                />
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleSaveEdit(account.id)}
@@ -793,6 +1037,24 @@ return (
                         <span>تحذير: استخدام عالي</span>
                       </div>
                     )}
+                    
+                    {(account.lastMonthDebt > 0 || account.currentMonthDebt > 0) && (
+                      <div className="mt-4 pt-4 border-t-2 border-red-300">
+                        <p className="text-xs font-semibold text-gray-600 mb-2">تفاصيل المديونية:</p>
+                        {account.lastMonthDebt > 0 && (
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-600">• من {lastMonthName}:</span>
+                            <span className="font-bold text-orange-600">{account.lastMonthDebt.toLocaleString()} ج.م</span>
+                          </div>
+                        )}
+                        {account.currentMonthDebt > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">• من {currentMonthName}:</span>
+                            <span className="font-bold text-yellow-600">{account.currentMonthDebt.toLocaleString()} ج.م</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -862,11 +1124,11 @@ return (
                     return (
                       <div
                         key={transaction.id}
-                        className={`${bgColor} rounded-xl p-4 border-2 border-${bgColor.replace('50', '200')}`}
+                        className={`${bgColor} rounded-xl p-4 border-2`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3 flex-1">
-                            <div className={`w-10 h-10 ${bgColor.replace('50', '100')} rounded-full flex items-center justify-center ${textColor}`}>
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${textColor}`}>
                               {icon}
                             </div>
                             <div className="flex-1">
