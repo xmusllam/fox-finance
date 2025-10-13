@@ -8,6 +8,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const [incomes, setIncomes] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [transfers, setTransfers] = useState([]);
 
   useEffect(() => {
     const incomesQuery = query(collection(db, 'incomes'), where('userId', '==', userId));
@@ -25,10 +26,16 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
       setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const transfersQuery = query(collection(db, 'transfers'), where('userId', '==', userId));
+    const unsubTransfers = onSnapshot(transfersQuery, (snapshot) => {
+      setTransfers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubIncomes();
       unsubExpenses();
       unsubAccounts();
+      unsubTransfers();
     };
   }, [userId]);
 
@@ -107,32 +114,43 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const netBalance = totalAccounts - totalDebts;
   const grandTotal = totalCapital + netBalance;
 
-  // حساب ديون الكريدت كارد للشهر السابق والحالي
-  const currentMonth = today.getMonth();
-  const currentMonthYear = today.getFullYear();
-  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-  const lastMonthYear = currentMonth === 0 ? currentMonthYear - 1 : currentMonthYear;
+  // حساب ديون الكريدت كارد بعد خصم التحويلات
+  let totalLastMonthDebt = 0;
+  let totalCurrentMonthDebt = 0;
 
-  const lastMonthExpenses = expenses.filter(exp => {
-    if (!exp.accountId) return false;
-    const account = accounts.find(a => a.id === exp.accountId);
-    if (!account?.isCredit) return false;
-    const expDate = new Date(exp.date);
-    return expDate.getMonth() === lastMonth && expDate.getFullYear() === lastMonthYear;
+  creditAccounts.forEach(account => {
+    let accountLastMonthDebt = account.lastMonthDebt || 0;
+    let accountCurrentMonthDebt = account.currentMonthDebt || 0;
+    
+    // نطرح التحويلات (السداد) اللي راحت لهذا الحساب
+    const paymentsToThisAccount = transfers
+      .filter(t => t.toAccountId === account.id)
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    
+    // نخصم من الشهر الماضي أولاً
+    if (paymentsToThisAccount > 0) {
+      if (paymentsToThisAccount >= accountLastMonthDebt) {
+        // السداد أكبر من أو يساوي دين الشهر الماضي
+        const remaining = paymentsToThisAccount - accountLastMonthDebt;
+        accountLastMonthDebt = 0;
+        accountCurrentMonthDebt = Math.max(0, accountCurrentMonthDebt - remaining);
+      } else {
+        // السداد أقل من دين الشهر الماضي
+        accountLastMonthDebt -= paymentsToThisAccount;
+      }
+    }
+    
+    totalLastMonthDebt += accountLastMonthDebt;
+    totalCurrentMonthDebt += accountCurrentMonthDebt;
   });
 
-  const currentMonthExpenses = expenses.filter(exp => {
-    if (!exp.accountId) return false;
-    const account = accounts.find(a => a.id === exp.accountId);
-    if (!account?.isCredit) return false;
-    const expDate = new Date(exp.date);
-    return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentMonthYear;
-  });
+  const debtDueThisMonth = totalLastMonthDebt;
+  const debtPostponedToNextMonth = totalCurrentMonthDebt;
 
-  const debtDueThisMonth = lastMonthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
-  const debtPostponedToNextMonth = currentMonthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+  const nextMonth = today.getMonth() === 11 ? 'يناير' : new Date(today.getFullYear(), today.getMonth() + 1).toLocaleDateString('ar-EG', { month: 'long' });
 
-  // جدول رؤية السنة
+  // Continue in Part 2...
+// جدول رؤية السنة
   const yearlyOverview = useMemo(() => {
     const months = [
       'يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو',
@@ -190,13 +208,11 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
       const month = item.date?.substring(0, 7);
       if (month && months[month]) months[month].expenses += item.amount;
     });
-  
+    
     return Object.values(months).sort((a, b) => a.month.localeCompare(b.month));
   }, [filteredIncomes, filteredExpenses]);
 
   const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#14b8a6'];
-
-  const nextMonth = today.getMonth() === 11 ? 'يناير' : new Date(today.getFullYear(), today.getMonth() + 1).toLocaleDateString('ar-EG', { month: 'long' });
 
   return (
     <div className="space-y-6">
@@ -230,7 +246,7 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         <div className={`bg-gradient-to-br ${totalCapital >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-500 to-gray-600'} rounded-2xl shadow-lg p-6 text-white`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-100 text-sm mb-1">الفائض</p>
+              <p className="text-blue-100 text-sm mb-1">رأس المال</p>
               <p className="text-3xl md:text-4xl font-bold">{totalCapital.toLocaleString()} ج.م</p>
             </div>
             <Wallet className="w-10 h-10 md:w-12 md:h-12 text-blue-200" />
@@ -243,13 +259,13 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-indigo-100 text-sm mb-1">الحسابات والأرصدة</p>
+              <p className="text-indigo-100 text-sm mb-1">الأرصدة</p>
               <p className="text-3xl md:text-4xl font-bold">{totalAccounts.toLocaleString()} ج.م</p>
             </div>
             <Briefcase className="w-10 h-10 md:w-12 md:h-12 text-indigo-200" />
           </div>
         </button>
-        
+
         <button
           onClick={() => onNavigate('accounts')}
           className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
@@ -266,23 +282,23 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm mb-1">المتبقى بعد سداد الديون</p>
+              <p className="text-purple-100 text-sm mb-1">النهائي بعد الديون</p>
               <p className="text-3xl md:text-4xl font-bold">{netBalance.toLocaleString()} ج.م</p>
             </div>
             <DollarSign className="w-10 h-10 md:w-12 md:h-12 text-purple-200" />
           </div>
         </div>
-        
+
         <button
           onClick={() => onNavigate('accounts')}
-          className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
+          className="bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all transform hover:scale-105 text-right"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-orange-100 text-sm mb-1">مديونية هذا الشهر</p>
+              <p className="text-red-100 text-sm mb-1">مطلوب سداده هذا الشهر</p>
               <p className="text-3xl md:text-4xl font-bold">{debtDueThisMonth.toLocaleString()} ج.م</p>
             </div>
-            <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-orange-200" />
+            <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-red-200" />
           </div>
         </button>
 
@@ -292,22 +308,60 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-yellow-100 text-sm mb-1">مديونية تؤجل حتى {nextMonth}</p>
+              <p className="text-yellow-100 text-sm mb-1">يؤجل حتى {nextMonth}</p>
               <p className="text-3xl md:text-4xl font-bold">{debtPostponedToNextMonth.toLocaleString()} ج.م</p>
             </div>
             <Calendar className="w-10 h-10 md:w-12 md:h-12 text-yellow-200" />
           </div>
         </button>
-    
+
         <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-teal-100 text-sm mb-1">الفائض والمتبقى</p>
+              <p className="text-teal-100 text-sm mb-1">التوتال</p>
               <p className="text-3xl md:text-4xl font-bold">{grandTotal.toLocaleString()} ج.م</p>
             </div>
             <DollarSign className="w-10 h-10 md:w-12 md:h-12 text-teal-200" />
           </div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
+        <h3 className="text-xl font-bold text-gray-800 mb-6">رؤية السنة {currentYear}</h3>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-3 text-right font-bold">الشهر</th>
+              <th className="p-3 text-right font-bold text-emerald-600">الدخل</th>
+              <th className="p-3 text-right font-bold text-red-600">المصروفات</th>
+              <th className="p-3 text-right font-bold text-blue-600">الفائض</th>
+            </tr>
+          </thead>
+          <tbody>
+            {yearlyOverview.map((row, idx) => (
+              <tr key={idx} className="border-b hover:bg-gray-50">
+                <td className="p-3 font-semibold">{row.month}</td>
+                <td className="p-3 text-emerald-600">{row.income.toLocaleString()} ج.م</td>
+                <td className="p-3 text-red-600">{row.expense.toLocaleString()} ج.م</td>
+                <td className={`p-3 font-bold ${row.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {row.surplus.toLocaleString()} ج.م
+                </td>
+              </tr>
+            ))}
+            <tr className="bg-gray-100 font-bold">
+              <td className="p-3">الإجمالي</td>
+              <td className="p-3 text-emerald-600">
+                {yearlyOverview.reduce((s, r) => s + r.income, 0).toLocaleString()} ج.م
+              </td>
+              <td className="p-3 text-red-600">
+                {yearlyOverview.reduce((s, r) => s + r.expense, 0).toLocaleString()} ج.م
+              </td>
+              <td className="p-3 text-blue-600">
+                {yearlyOverview.reduce((s, r) => s + r.surplus, 0).toLocaleString()} ج.م
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
         
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -370,44 +424,6 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
-        <h3 className="text-xl font-bold text-gray-800 mb-6">رؤية السنة {currentYear}</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-3 text-right font-bold">الشهر</th>
-              <th className="p-3 text-right font-bold text-emerald-600">الدخل</th>
-              <th className="p-3 text-right font-bold text-red-600">المصروفات</th>
-              <th className="p-3 text-right font-bold text-blue-600">الفائض</th>
-            </tr>
-          </thead>
-          <tbody>
-            {yearlyOverview.map((row, idx) => (
-              <tr key={idx} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-semibold">{row.month}</td>
-                <td className="p-3 text-emerald-600">{row.income.toLocaleString()} ج.م</td>
-                <td className="p-3 text-red-600">{row.expense.toLocaleString()} ج.م</td>
-                <td className={`p-3 font-bold ${row.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                  {row.surplus.toLocaleString()} ج.م
-                </td>
-              </tr>
-            ))}
-            <tr className="bg-gray-100 font-bold">
-              <td className="p-3">الإجمالي</td>
-              <td className="p-3 text-emerald-600">
-                {yearlyOverview.reduce((s, r) => s + r.income, 0).toLocaleString()} ج.م
-              </td>
-              <td className="p-3 text-red-600">
-                {yearlyOverview.reduce((s, r) => s + r.expense, 0).toLocaleString()} ج.م
-              </td>
-              <td className="p-3 text-blue-600">
-                {yearlyOverview.reduce((s, r) => s + r.surplus, 0).toLocaleString()} ج.م
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
   );
