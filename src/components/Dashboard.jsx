@@ -260,7 +260,7 @@ creditAccounts.forEach(account => {
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm mb-1">رأس المال بعد الديون</p>
+              <p className="text-purple-100 text-sm mb-1">الأرصدة بعد المديونيات</p>
               <p className="text-3xl md:text-4xl font-bold">{netBalance.toLocaleString()} ج.م</p>
             </div>
             <DollarSign className="w-10 h-10 md:w-12 md:h-12 text-purple-200" />
@@ -273,7 +273,7 @@ creditAccounts.forEach(account => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-red-100 text-sm mb-1">مديونية</p>
+              <p className="text-red-100 text-sm mb-1">مديونية 25 الشهر الحالى</p>
               <p className="text-3xl md:text-4xl font-bold">{debtDueThisMonth.toLocaleString()} ج.م</p>
             </div>
             <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-red-200" />
@@ -286,7 +286,7 @@ creditAccounts.forEach(account => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-yellow-100 text-sm mb-1">مديونية {nextMonth}</p>
+              <p className="text-yellow-100 text-sm mb-1">مديونية 25 {nextMonth}</p>
               <p className="text-3xl md:text-4xl font-bold">{debtPostponedToNextMonth.toLocaleString()} ج.م</p>
             </div>
             <Calendar className="w-10 h-10 md:w-12 md:h-12 text-yellow-200" />
@@ -296,7 +296,7 @@ creditAccounts.forEach(account => {
         <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-teal-100 text-sm mb-1">التوتال</p>
+              <p className="text-teal-100 text-sm mb-1">إجمالى الأرصدة والدخل</p>
               <p className="text-3xl md:text-4xl font-bold">{grandTotal.toLocaleString()} ج.م</p>
             </div>
             <DollarSign className="w-10 h-10 md:w-12 md:h-12 text-teal-200" />
