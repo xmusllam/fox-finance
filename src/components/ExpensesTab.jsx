@@ -119,24 +119,43 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
     return items;
   };
 
-  // Continue in Part 2...
-const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
+  const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
+    const account = accounts.find(a => a.id === accountId);
+    if (!account) return;
+
     const transactionDateTime = new Date(transactionDate + 'T00:00:00');
     const now = new Date();
     const delay = transactionDateTime - now;
 
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const transactionMonth = transactionDateTime.getMonth();
+    const transactionYear = transactionDateTime.getFullYear();
+
     if (delay <= 0) {
-      const account = accounts.find(a => a.id === accountId);
-      if (account) {
-        if (account.isCredit) {
-          await updateDoc(doc(db, 'accounts', accountId), {
-            balance: (account.balance || 0) - amount
-          });
-        } else {
-          await updateDoc(doc(db, 'accounts', accountId), {
-            balance: (account.balance || 0) - amount
-          });
+      if (account.isCredit) {
+        let lastMonthDebt = account.lastMonthDebt || 0;
+        let currentMonthDebt = account.currentMonthDebt || 0;
+
+        if (transactionMonth === currentMonth && transactionYear === currentYear) {
+          currentMonthDebt += amount;
+        } 
+        else if (transactionYear < currentYear || (transactionYear === currentYear && transactionMonth < currentMonth)) {
+          lastMonthDebt += amount;
         }
+        else {
+          currentMonthDebt += amount;
+        }
+
+        await updateDoc(doc(db, 'accounts', accountId), {
+          balance: (account.balance || 0) - amount,
+          lastMonthDebt: lastMonthDebt,
+          currentMonthDebt: currentMonthDebt
+        });
+      } else {
+        await updateDoc(doc(db, 'accounts', accountId), {
+          balance: (account.balance || 0) - amount
+        });
       }
     } else {
       await addDoc(collection(db, 'scheduledTransactions'), {
@@ -201,7 +220,6 @@ const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
       months: 1
     });
   };
-
   const handleDeleteExpense = async (expense) => {
     if (!confirm('هل أنت متأكد من حذف هذا المصروف؟')) return;
 
@@ -209,8 +227,28 @@ const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
       const account = accounts.find(a => a.id === expense.accountId);
       if (account) {
         if (account.isCredit) {
+          const now = new Date();
+          const expenseDate = new Date(expense.date + 'T00:00:00');
+          const currentMonth = now.getMonth();
+          const currentYear = now.getFullYear();
+          const expenseMonth = expenseDate.getMonth();
+          const expenseYear = expenseDate.getFullYear();
+
+          let lastMonthDebt = account.lastMonthDebt || 0;
+          let currentMonthDebt = account.currentMonthDebt || 0;
+
+          if (expenseMonth === currentMonth && expenseYear === currentYear) {
+            currentMonthDebt = Math.max(0, currentMonthDebt - expense.amount);
+          } else if (expenseYear < currentYear || (expenseYear === currentYear && expenseMonth < currentMonth)) {
+            lastMonthDebt = Math.max(0, lastMonthDebt - expense.amount);
+          } else {
+            currentMonthDebt = Math.max(0, currentMonthDebt - expense.amount);
+          }
+
           await updateDoc(doc(db, 'accounts', expense.accountId), {
-            balance: (account.balance || 0) + expense.amount
+            balance: (account.balance || 0) + expense.amount,
+            lastMonthDebt: lastMonthDebt,
+            currentMonthDebt: currentMonthDebt
           });
         } else {
           await updateDoc(doc(db, 'accounts', expense.accountId), {
@@ -344,26 +382,118 @@ const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
       if (expense.accountId === editExpenseData.accountId && diff !== 0) {
         const account = accounts.find(a => a.id === expense.accountId);
         if (account) {
-          await updateDoc(doc(db, 'accounts', expense.accountId), {
-            balance: (account.balance || 0) - diff
-          });
+          if (account.isCredit) {
+            const now = new Date();
+            const oldExpenseDate = new Date(expense.date + 'T00:00:00');
+            const newExpenseDate = new Date(editExpenseData.date + 'T00:00:00');
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            
+            const oldExpenseMonth = oldExpenseDate.getMonth();
+            const oldExpenseYear = oldExpenseDate.getFullYear();
+            const newExpenseMonth = newExpenseDate.getMonth();
+            const newExpenseYear = newExpenseDate.getFullYear();
+
+            let lastMonthDebt = account.lastMonthDebt || 0;
+            let currentMonthDebt = account.currentMonthDebt || 0;
+
+            // إزالة المبلغ القديم من الشهر القديم
+            if (oldExpenseMonth === currentMonth && oldExpenseYear === currentYear) {
+              currentMonthDebt = Math.max(0, currentMonthDebt - oldAmount);
+            } else if (oldExpenseYear < currentYear || (oldExpenseYear === currentYear && oldExpenseMonth < currentMonth)) {
+              lastMonthDebt = Math.max(0, lastMonthDebt - oldAmount);
+            } else {
+              currentMonthDebt = Math.max(0, currentMonthDebt - oldAmount);
+            }
+
+            // إضافة المبلغ الجديد للشهر الجديد
+            if (newExpenseMonth === currentMonth && newExpenseYear === currentYear) {
+              currentMonthDebt += newAmount;
+            } else if (newExpenseYear < currentYear || (newExpenseYear === currentYear && newExpenseMonth < currentMonth)) {
+              lastMonthDebt += newAmount;
+            } else {
+              currentMonthDebt += newAmount;
+            }
+
+            await updateDoc(doc(db, 'accounts', expense.accountId), {
+              balance: (account.balance || 0) - diff,
+              lastMonthDebt: lastMonthDebt,
+              currentMonthDebt: currentMonthDebt
+            });
+          } else {
+            await updateDoc(doc(db, 'accounts', expense.accountId), {
+              balance: (account.balance || 0) - diff
+            });
+          }
         }
       } else if (expense.accountId !== editExpenseData.accountId) {
         if (expense.accountId) {
           const oldAccount = accounts.find(a => a.id === expense.accountId);
           if (oldAccount) {
-            await updateDoc(doc(db, 'accounts', expense.accountId), {
-              balance: (oldAccount.balance || 0) + oldAmount
-            });
+            if (oldAccount.isCredit) {
+              const now = new Date();
+              const expenseDate = new Date(expense.date + 'T00:00:00');
+              const currentMonth = now.getMonth();
+              const currentYear = now.getFullYear();
+              const expenseMonth = expenseDate.getMonth();
+              const expenseYear = expenseDate.getFullYear();
+
+              let lastMonthDebt = oldAccount.lastMonthDebt || 0;
+              let currentMonthDebt = oldAccount.currentMonthDebt || 0;
+
+              if (expenseMonth === currentMonth && expenseYear === currentYear) {
+                currentMonthDebt = Math.max(0, currentMonthDebt - oldAmount);
+              } else if (expenseYear < currentYear || (expenseYear === currentYear && expenseMonth < currentMonth)) {
+                lastMonthDebt = Math.max(0, lastMonthDebt - oldAmount);
+              } else {
+                currentMonthDebt = Math.max(0, currentMonthDebt - oldAmount);
+              }
+
+              await updateDoc(doc(db, 'accounts', expense.accountId), {
+                balance: (oldAccount.balance || 0) + oldAmount,
+                lastMonthDebt: lastMonthDebt,
+                currentMonthDebt: currentMonthDebt
+              });
+            } else {
+              await updateDoc(doc(db, 'accounts', expense.accountId), {
+                balance: (oldAccount.balance || 0) + oldAmount
+              });
+            }
           }
         }
 
         if (editExpenseData.accountId) {
           const newAccount = accounts.find(a => a.id === editExpenseData.accountId);
           if (newAccount) {
-            await updateDoc(doc(db, 'accounts', editExpenseData.accountId), {
-              balance: (newAccount.balance || 0) - newAmount
-            });
+            if (newAccount.isCredit) {
+              const now = new Date();
+              const newExpenseDate = new Date(editExpenseData.date + 'T00:00:00');
+              const currentMonth = now.getMonth();
+              const currentYear = now.getFullYear();
+              const newExpenseMonth = newExpenseDate.getMonth();
+              const newExpenseYear = newExpenseDate.getFullYear();
+
+              let lastMonthDebt = newAccount.lastMonthDebt || 0;
+              let currentMonthDebt = newAccount.currentMonthDebt || 0;
+
+              if (newExpenseMonth === currentMonth && newExpenseYear === currentYear) {
+                currentMonthDebt += newAmount;
+              } else if (newExpenseYear < currentYear || (newExpenseYear === currentYear && newExpenseMonth < currentMonth)) {
+                lastMonthDebt += newAmount;
+              } else {
+                currentMonthDebt += newAmount;
+              }
+
+              await updateDoc(doc(db, 'accounts', editExpenseData.accountId), {
+                balance: (newAccount.balance || 0) - newAmount,
+                lastMonthDebt: lastMonthDebt,
+                currentMonthDebt: currentMonthDebt
+              });
+            } else {
+              await updateDoc(doc(db, 'accounts', editExpenseData.accountId), {
+                balance: (newAccount.balance || 0) - newAmount
+              });
+            }
           }
         }
       }
@@ -380,9 +510,7 @@ const scheduleAccountUpdate = async (accountId, amount, transactionDate) => {
     setEditingExpense(null);
     setEditExpenseData({});
   };
-
-  // Continue in Part 3 (Return statement)...
-const filteredExpenses = filterByDate(expenses);
+  const filteredExpenses = filterByDate(expenses);
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + (item.amount || 0), 0);
 
   const groupedExpenses = categories.map(category => {
@@ -653,7 +781,6 @@ const filteredExpenses = filterByDate(expenses);
           </div>
         </div>
       </div>
-
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <h3 className="text-2xl font-bold text-gray-800 mb-6">قائمة المصروفات</h3>
         
