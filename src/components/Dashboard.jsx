@@ -224,7 +224,7 @@ creditAccounts.forEach(account => {
         <div className={`bg-gradient-to-br ${totalCapital >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-500 to-gray-600'} rounded-2xl shadow-lg p-6 text-white`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-100 text-sm mb-1">رأس المال</p>
+              <p className="text-blue-100 text-sm mb-1">الدخل بعد المصروفات</p>
               <p className="text-3xl md:text-4xl font-bold">{totalCapital.toLocaleString()} ج.م</p>
             </div>
             <Wallet className="w-10 h-10 md:w-12 md:h-12 text-blue-200" />
@@ -237,7 +237,7 @@ creditAccounts.forEach(account => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-indigo-100 text-sm mb-1">الأرصدة</p>
+              <p className="text-indigo-100 text-sm mb-1">الحسابات والأرصدة</p>
               <p className="text-3xl md:text-4xl font-bold">{totalAccounts.toLocaleString()} ج.م</p>
             </div>
             <Briefcase className="w-10 h-10 md:w-12 md:h-12 text-indigo-200" />
@@ -250,7 +250,7 @@ creditAccounts.forEach(account => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-orange-100 text-sm mb-1">ديون الكريدت كارد</p>
+              <p className="text-orange-100 text-sm mb-1">المديونيات</p>
               <p className="text-3xl md:text-4xl font-bold">{totalDebts.toLocaleString()} ج.م</p>
             </div>
             <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-orange-200" />
@@ -260,7 +260,7 @@ creditAccounts.forEach(account => {
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm mb-1">النهائي بعد الديون</p>
+              <p className="text-purple-100 text-sm mb-1">رأس المال بعد الديون</p>
               <p className="text-3xl md:text-4xl font-bold">{netBalance.toLocaleString()} ج.م</p>
             </div>
             <DollarSign className="w-10 h-10 md:w-12 md:h-12 text-purple-200" />
@@ -273,7 +273,7 @@ creditAccounts.forEach(account => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-red-100 text-sm mb-1">مطلوب سداده هذا الشهر</p>
+              <p className="text-red-100 text-sm mb-1">مديونية {currentMonth}</p>
               <p className="text-3xl md:text-4xl font-bold">{debtDueThisMonth.toLocaleString()} ج.م</p>
             </div>
             <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-red-200" />
@@ -286,7 +286,7 @@ creditAccounts.forEach(account => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-yellow-100 text-sm mb-1">يؤجل حتى {nextMonth}</p>
+              <p className="text-yellow-100 text-sm mb-1">مديونية {nextMonth}</p>
               <p className="text-3xl md:text-4xl font-bold">{debtPostponedToNextMonth.toLocaleString()} ج.م</p>
             </div>
             <Calendar className="w-10 h-10 md:w-12 md:h-12 text-yellow-200" />
