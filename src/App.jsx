@@ -83,68 +83,70 @@ function App() {
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-24" dir="rtl">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-          >
-            <Wallet className="w-8 h-8" />
-            <span className="text-xl font-bold hidden md:inline">Fox Finance</span>
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="text-lg font-semibold">
-              مرحباً {user.displayName || user.email?.split('@')[0]}
-            </div>
-            <button
-              onClick={() => setActiveTab('account')}
-              className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
-              title="حسابي"
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-24 pt-[140px] md:pt-24" dir="rtl">
+      {/* Header - Fixed with safe area */}
+      <div className="fixed top-0 left-0 right-0 z-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+            <button 
+              onClick={() => setActiveTab('dashboard')}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
-              <User className="w-5 h-5" />
+              <Wallet className="w-8 h-8" />
+              <span className="text-xl font-bold hidden md:inline">Fox Finance</span>
             </button>
+            <div className="flex items-center gap-3">
+              <div className="text-lg font-semibold">
+                مرحباً {user.displayName || user.email?.split('@')[0]}
+              </div>
+              <button
+                onClick={() => setActiveTab('account')}
+                className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
+                title="حسابي"
+              >
+                <User className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Date Filter */}
-      <div className="bg-white shadow-md border-b sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-2 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-2 pb-2" style={{ minWidth: 'max-content' }}>
-            {filterButtons.map(btn => (
-              <button
-                key={btn.id}
-                onClick={() => setDateFilter(btn.id)}
-                className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all flex-shrink-0 ${
-                  dateFilter === btn.id
-                    ? 'bg-emerald-600 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
-                }`}
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
-          
-          {dateFilter === 'custom' && (
-            <div className="flex items-center gap-2 mt-3">
-              <input 
-                type="date" 
-                value={customDateFrom}
-                onChange={(e) => setCustomDateFrom(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-              <span className="text-gray-600 text-sm">إلى</span>
-              <input 
-                type="date" 
-                value={customDateTo}
-                onChange={(e) => setCustomDateTo(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
+        {/* Date Filter */}
+        <div className="bg-white shadow-md border-b">
+          <div className="container mx-auto px-4 py-2 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-2 pb-2" style={{ minWidth: 'max-content' }}>
+              {filterButtons.map(btn => (
+                <button
+                  key={btn.id}
+                  onClick={() => setDateFilter(btn.id)}
+                  className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all flex-shrink-0 ${
+                    dateFilter === btn.id
+                      ? 'bg-emerald-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
+                  }`}
+                >
+                  {btn.label}
+                </button>
+              ))}
             </div>
-          )}
+            
+            {dateFilter === 'custom' && (
+              <div className="flex items-center gap-2 mt-3">
+                <input 
+                  type="date" 
+                  value={customDateFrom}
+                  onChange={(e) => setCustomDateFrom(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <span className="text-gray-600 text-sm">إلى</span>
+                <input 
+                  type="date" 
+                  value={customDateTo}
+                  onChange={(e) => setCustomDateTo(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
