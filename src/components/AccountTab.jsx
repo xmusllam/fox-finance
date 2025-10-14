@@ -3,7 +3,7 @@ import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthP
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { auth, db, storage } from '../firebase';
-import { User, Lock, Image, Trash2, AlertTriangle, LogOut, Settings, Eye, EyeOff, ArrowUp, ArrowDown, Plus, Edit2, X, Check, Home as HomeIcon } from 'lucide-react';
+import { User, Lock, Image, Trash2, AlertTriangle, LogOut, Settings, Eye, EyeOff, ArrowUp, ArrowDown, Plus, Edit2, X, Check, Home as HomeIcon, Wallet, ArrowRightLeft, Minus } from 'lucide-react';
 
 export default function AccountTab({ user, userSettings, updateUserSettings }) {
   const [displayName, setDisplayName] = useState(user.displayName || '');
@@ -218,9 +218,9 @@ export default function AccountTab({ user, userSettings, updateUserSettings }) {
   const pageOptions = [
     { id: 'dashboard', label: 'الرئيسية', icon: HomeIcon },
     { id: 'income', label: 'الدخل', icon: Plus },
-    { id: 'expenses', label: 'المصروفات', icon: Trash2 },
-    { id: 'accounts', label: 'الحسابات', icon: User },
-    { id: 'transfers', label: 'التحويلات', icon: ArrowUp }
+    { id: 'expenses', label: 'المصروفات', icon: Minus },
+    { id: 'accounts', label: 'الحسابات', icon: Wallet },
+    { id: 'transfers', label: 'التحويلات', icon: ArrowRightLeft }
   ];
   return (
     <div className="space-y-6">
