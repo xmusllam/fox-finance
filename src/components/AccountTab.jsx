@@ -3,9 +3,9 @@ import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthP
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { auth, db, storage } from '../firebase';
-import { User, Lock, Image, Trash2, AlertTriangle, LogOut } from 'lucide-react';
+import { User, Lock, Image, Trash2, AlertTriangle, LogOut, Settings, Eye, EyeOff, ArrowUp, ArrowDown, Plus, Edit2, X, Check, Home as HomeIcon } from 'lucide-react';
 
-export default function AccountTab({ user }) {
+export default function AccountTab({ user, userSettings, updateUserSettings }) {
   const [displayName, setDisplayName] = useState(user.displayName || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -19,6 +19,15 @@ export default function AccountTab({ user }) {
     accounts: false,
     categories: false
   });
+
+  // إعدادات التطبيق
+  const [showAppSettings, setShowAppSettings] = useState(false);
+  const [localSettings, setLocalSettings] = useState(userSettings);
+  const [showFilterManager, setShowFilterManager] = useState(false);
+  const [newFilterId, setNewFilterId] = useState('');
+  const [newFilterLabel, setNewFilterLabel] = useState('');
+  const [editingFilter, setEditingFilter] = useState(null);
+  const [editFilterData, setEditFilterData] = useState({ id: '', label: '' });
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
@@ -131,6 +140,88 @@ export default function AccountTab({ user }) {
     }
   };
 
+  // إدارة إعدادات التطبيق
+  const handleSaveAppSettings = async () => {
+    await updateUserSettings(localSettings);
+    showMessage('success', 'تم حفظ إعدادات التطبيق بنجاح! ✅');
+    setShowAppSettings(false);
+  };
+
+  const handleAddFilter = () => {
+    if (!newFilterId || !newFilterLabel) {
+      showMessage('error', 'يرجى ملء جميع الحقول');
+      return;
+    }
+
+    if (localSettings.dateFilters.some(f => f.id === newFilterId)) {
+      showMessage('error', 'هذا المعرف مستخدم بالفعل');
+      return;
+    }
+
+    setLocalSettings({
+      ...localSettings,
+      dateFilters: [...localSettings.dateFilters, { id: newFilterId, label: newFilterLabel }]
+    });
+
+    setNewFilterId('');
+    setNewFilterLabel('');
+    showMessage('success', 'تم إضافة الفلتر بنجاح! ✅');
+  };
+
+  const handleMoveFilterUp = (index) => {
+    if (index === 0) return;
+    const newFilters = [...localSettings.dateFilters];
+    [newFilters[index], newFilters[index - 1]] = [newFilters[index - 1], newFilters[index]];
+    setLocalSettings({ ...localSettings, dateFilters: newFilters });
+  };
+
+  const handleMoveFilterDown = (index) => {
+    if (index === localSettings.dateFilters.length - 1) return;
+    const newFilters = [...localSettings.dateFilters];
+    [newFilters[index], newFilters[index + 1]] = [newFilters[index + 1], newFilters[index]];
+    setLocalSettings({ ...localSettings, dateFilters: newFilters });
+  };
+
+  const handleEditFilter = (filter) => {
+    setEditingFilter(filter.id);
+    setEditFilterData({ id: filter.id, label: filter.label });
+  };
+
+  const handleSaveFilterEdit = (oldId) => {
+    if (!editFilterData.id || !editFilterData.label) {
+      showMessage('error', 'يرجى ملء جميع الحقول');
+      return;
+    }
+
+    if (editFilterData.id !== oldId && localSettings.dateFilters.some(f => f.id === editFilterData.id)) {
+      showMessage('error', 'هذا المعرف مستخدم بالفعل');
+      return;
+    }
+
+    const newFilters = localSettings.dateFilters.map(f => 
+      f.id === oldId ? { id: editFilterData.id, label: editFilterData.label } : f
+    );
+    
+    setLocalSettings({ ...localSettings, dateFilters: newFilters });
+    setEditingFilter(null);
+    showMessage('success', 'تم تعديل الفلتر بنجاح! ✅');
+  };
+
+  const handleDeleteFilter = (filterId) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الفلتر؟')) return;
+    
+    const newFilters = localSettings.dateFilters.filter(f => f.id !== filterId);
+    setLocalSettings({ ...localSettings, dateFilters: newFilters });
+    showMessage('success', 'تم حذف الفلتر بنجاح! ✅');
+  };
+
+  const pageOptions = [
+    { id: 'dashboard', label: 'الرئيسية', icon: HomeIcon },
+    { id: 'income', label: 'الدخل', icon: Plus },
+    { id: 'expenses', label: 'المصروفات', icon: Trash2 },
+    { id: 'accounts', label: 'الحسابات', icon: User },
+    { id: 'transfers', label: 'التحويلات', icon: ArrowUp }
+  ];
   return (
     <div className="space-y-6">
       {message.text && (
@@ -138,6 +229,182 @@ export default function AccountTab({ user }) {
           {message.text}
         </div>
       )}
+
+      {/* إعدادات التطبيق */}
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Settings className="w-6 h-6" />
+            إعدادات التطبيق
+          </h3>
+          <button
+            onClick={() => setShowAppSettings(!showAppSettings)}
+            className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 font-semibold"
+          >
+            {showAppSettings ? 'إخفاء' : 'عرض'} الإعدادات
+          </button>
+        </div>
+
+        {showAppSettings && (
+          <div className="space-y-6">
+            {/* الصفحة الافتراضية */}
+            <div className="p-6 bg-emerald-50 rounded-xl border-2 border-emerald-200">
+              <h4 className="font-bold text-emerald-800 mb-4 text-lg">الصفحة الافتراضية عند فتح التطبيق</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {pageOptions.map(page => (
+                  <button
+                    key={page.id}
+                    onClick={() => setLocalSettings({ ...localSettings, defaultPage: page.id })}
+                    className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-2 ${
+                      localSettings.defaultPage === page.id
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-emerald-400'
+                    }`}
+                  >
+                    <page.icon className="w-6 h-6" />
+                    <span className="text-sm font-semibold">{page.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* إدارة فلاتر الفترة */}
+            <div className="p-6 bg-blue-50 rounded-xl border-2 border-blue-200">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-bold text-blue-800 text-lg">إدارة فلاتر الفترة</h4>
+                <button
+                  onClick={() => setShowFilterManager(!showFilterManager)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm"
+                >
+                  {showFilterManager ? 'إخفاء' : 'إدارة'} الفلاتر
+                </button>
+              </div>
+
+              {showFilterManager && (
+                <div className="space-y-4">
+                  {/* إضافة فلتر جديد */}
+                  <div className="bg-white p-4 rounded-lg border-2 border-blue-300">
+                    <h5 className="font-semibold text-gray-800 mb-3">إضافة فلتر جديد</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        value={newFilterId}
+                        onChange={(e) => setNewFilterId(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg"
+                        placeholder="معرف الفلتر (مثال: last-7-days)"
+                      />
+                      <input
+                        type="text"
+                        value={newFilterLabel}
+                        onChange={(e) => setNewFilterLabel(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg"
+                        placeholder="اسم الفلتر (مثال: آخر 7 أيام)"
+                      />
+                      <button
+                        onClick={handleAddFilter}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        إضافة
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* قائمة الفلاتر */}
+                  <div className="space-y-2">
+                    {localSettings.dateFilters.map((filter, idx) => (
+                      <div key={filter.id} className="bg-white p-3 rounded-lg border-2 border-blue-300 flex items-center gap-2">
+                        {editingFilter === filter.id ? (
+                          <>
+                            <input
+                              type="text"
+                              value={editFilterData.id}
+                              onChange={(e) => setEditFilterData({ ...editFilterData, id: e.target.value })}
+                              className="flex-1 px-2 py-1 border border-blue-400 rounded"
+                              placeholder="المعرف"
+                            />
+                            <input
+                              type="text"
+                              value={editFilterData.label}
+                              onChange={(e) => setEditFilterData({ ...editFilterData, label: e.target.value })}
+                              className="flex-1 px-2 py-1 border border-blue-400 rounded"
+                              placeholder="الاسم"
+                            />
+                            <button
+                              onClick={() => handleSaveFilterEdit(filter.id)}
+                              className="text-green-600 hover:text-green-800"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setEditingFilter(null)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex-1">
+                              <span className="font-semibold text-gray-800">{filter.label}</span>
+                              <span className="text-xs text-gray-500 mr-2">({filter.id})</span>
+                            </div>
+                            <button
+                              onClick={() => handleMoveFilterUp(idx)}
+                              disabled={idx === 0}
+                              className={`${idx === 0 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleMoveFilterDown(idx)}
+                              disabled={idx === localSettings.dateFilters.length - 1}
+                              className={`${idx === localSettings.dateFilters.length - 1 ? 'text-gray-300' : 'text-blue-600 hover:text-blue-800'}`}
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEditFilter(filter)}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteFilter(filter.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* زر حفظ الإعدادات */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveAppSettings}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold"
+              >
+                حفظ إعدادات التطبيق
+              </button>
+              <button
+                onClick={() => {
+                  setLocalSettings(userSettings);
+                  setShowAppSettings(false);
+                }}
+                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-3 rounded-lg font-bold"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
