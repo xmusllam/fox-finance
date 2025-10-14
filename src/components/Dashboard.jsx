@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { TrendingUp, TrendingDown, Wallet, DollarSign, Briefcase, CreditCard, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Briefcase, CreditCard, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-export default function Dashboard({ userId, dateFilter, customDateFrom, customDateTo, yearStart, yearEnd, today, tomorrow, yesterday, currentYear, onNavigate }) {
+export default function Dashboard({ userId, dateFilter, customDateFrom, customDateTo, yearStart, yearEnd, today, tomorrow, yesterday, currentYear, onNavigate, userSettings }) {
   const [incomes, setIncomes] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [transfers, setTransfers] = useState([]);
+  const [expandedMonths, setExpandedMonths] = useState({});
+  const [expandedDays, setExpandedDays] = useState({});
 
   useEffect(() => {
     const incomesQuery = query(collection(db, 'incomes'), where('userId', '==', userId));
@@ -114,21 +116,35 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
   const netBalance = totalAccounts - totalDebts;
   const grandTotal = totalCapital + netBalance;
 
-  // حساب ديون الكريدت كارد مباشرة من الحسابات
-let totalLastMonthDebt = 0;
-let totalCurrentMonthDebt = 0;
+  let totalLastMonthDebt = 0;
+  let totalCurrentMonthDebt = 0;
 
-creditAccounts.forEach(account => {
-  totalLastMonthDebt += account.lastMonthDebt || 0;
-  totalCurrentMonthDebt += account.currentMonthDebt || 0;
-});
+  creditAccounts.forEach(account => {
+    totalLastMonthDebt += account.lastMonthDebt || 0;
+    totalCurrentMonthDebt += account.currentMonthDebt || 0;
+  });
 
   const debtDueThisMonth = totalLastMonthDebt;
   const debtPostponedToNextMonth = totalCurrentMonthDebt;
 
   const nextMonth = today.getMonth() === 11 ? 'يناير' : new Date(today.getFullYear(), today.getMonth() + 1).toLocaleDateString('ar-EG', { month: 'long' });
 
-  // جدول رؤية السنة
+  const toggleMonth = (monthIndex) => {
+    setExpandedMonths(prev => ({
+      ...prev,
+      [monthIndex]: !prev[monthIndex]
+    }));
+  };
+
+  const toggleDay = (monthIndex, day) => {
+    const key = `${monthIndex}-${day}`;
+    setExpandedDays(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  // جدول رؤية السنة مع الأيام
   const yearlyOverview = useMemo(() => {
     const months = [
       'يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو',
@@ -149,8 +165,46 @@ creditAccounts.forEach(account => {
       const income = monthIncomes.reduce((sum, inc) => sum + (inc.amount || 0), 0);
       const expense = monthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
       const surplus = income - expense;
+
+      // حساب عدد أيام الشهر
+      const daysInMonth = new Date(currentYear, index + 1, 0).getDate();
+      const days = [];
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayIncomes = incomes.filter(inc => {
+          const date = new Date(inc.date);
+          return date.getDate() === day && date.getMonth() === index && date.getFullYear() === currentYear;
+        });
+
+        const dayExpenses = expenses.filter(exp => {
+          const date = new Date(exp.date);
+          return date.getDate() === day && date.getMonth() === index && date.getFullYear() === currentYear;
+        });
+
+        const dayIncome = dayIncomes.reduce((sum, inc) => sum + (inc.amount || 0), 0);
+        const dayExpense = dayExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+        const daySurplus = dayIncome - dayExpense;
+
+        if (dayIncome > 0 || dayExpense > 0) {
+          days.push({
+            day,
+            income: dayIncome,
+            expense: dayExpense,
+            surplus: daySurplus,
+            incomes: dayIncomes,
+            expenses: dayExpenses
+          });
+        }
+      }
       
-      return { month: monthName, income, expense, surplus };
+      return { 
+        month: monthName, 
+        monthIndex: index,
+        income, 
+        expense, 
+        surplus,
+        days 
+      };
     });
   }, [incomes, expenses, currentYear]);
 
@@ -191,7 +245,6 @@ creditAccounts.forEach(account => {
   }, [filteredIncomes, filteredExpenses]);
 
   const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#14b8a6'];
-
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -365,12 +418,12 @@ creditAccounts.forEach(account => {
           </ResponsiveContainer>
         </div>
       </div>
-
       <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
         <h3 className="text-xl font-bold text-gray-800 mb-6">رؤية السنة {currentYear}</h3>
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-100">
+              <th className="p-3 text-right font-bold w-10"></th>
               <th className="p-3 text-right font-bold">الشهر</th>
               <th className="p-3 text-right font-bold text-emerald-600">الدخل</th>
               <th className="p-3 text-right font-bold text-red-600">المصروفات</th>
@@ -379,16 +432,155 @@ creditAccounts.forEach(account => {
           </thead>
           <tbody>
             {yearlyOverview.map((row, idx) => (
-              <tr key={idx} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-semibold">{row.month}</td>
-                <td className="p-3 text-emerald-600">{row.income.toLocaleString()} ج.م</td>
-                <td className="p-3 text-red-600">{row.expense.toLocaleString()} ج.م</td>
-                <td className={`p-3 font-bold ${row.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                  {row.surplus.toLocaleString()} ج.م
-                </td>
-              </tr>
+              <React.Fragment key={idx}>
+                <tr className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => toggleMonth(row.monthIndex)}>
+                  <td className="p-3">
+                    <button className="text-blue-600 hover:text-blue-800">
+                      {expandedMonths[row.monthIndex] ? (
+                        <ChevronUp className="w-5 h-5" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5" />
+                      )}
+                    </button>
+                  </td>
+                  <td className="p-3 font-semibold">{row.month}</td>
+                  <td className="p-3 text-emerald-600">{row.income.toLocaleString()} ج.م</td>
+                  <td className="p-3 text-red-600">{row.expense.toLocaleString()} ج.م</td>
+                  <td className={`p-3 font-bold ${row.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                    {row.surplus.toLocaleString()} ج.م
+                  </td>
+                </tr>
+
+                {/* أيام الشهر */}
+                {expandedMonths[row.monthIndex] && row.days.length > 0 && (
+                  <tr>
+                    <td colSpan="5" className="p-0">
+                      <div className="bg-gray-50 p-4">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-200">
+                              <th className="p-2 text-right font-semibold w-10"></th>
+                              <th className="p-2 text-right font-semibold">اليوم</th>
+                              <th className="p-2 text-right font-semibold text-emerald-600">الدخل</th>
+                              <th className="p-2 text-right font-semibold text-red-600">المصروفات</th>
+                              <th className="p-2 text-right font-semibold text-blue-600">الفائض</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {row.days.map((dayData, dayIdx) => (
+                              <React.Fragment key={dayIdx}>
+                                <tr 
+                                  className="border-b hover:bg-gray-100 cursor-pointer"
+                                  onClick={() => toggleDay(row.monthIndex, dayData.day)}
+                                >
+                                  <td className="p-2">
+                                    <button className="text-purple-600 hover:text-purple-800">
+                                      {expandedDays[`${row.monthIndex}-${dayData.day}`] ? (
+                                        <ChevronUp className="w-4 h-4" />
+                                      ) : (
+                                        <ChevronDown className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  </td>
+                                  <td className="p-2 font-medium">{dayData.day} {row.month}</td>
+                                  <td className="p-2 text-emerald-600">{dayData.income.toLocaleString()} ج.م</td>
+                                  <td className="p-2 text-red-600">{dayData.expense.toLocaleString()} ج.م</td>
+                                  <td className={`p-2 font-semibold ${dayData.surplus >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                    {dayData.surplus.toLocaleString()} ج.م
+                                  </td>
+                                </tr>
+
+                                {/* تفاصيل المعاملات */}
+                                {expandedDays[`${row.monthIndex}-${dayData.day}`] && (
+                                  <tr>
+                                    <td colSpan="5" className="p-0">
+                                      <div className="bg-white p-4 border-l-4 border-purple-400">
+                                        <div className="space-y-3">
+                                          {/* الدخل */}
+                                          {dayData.incomes.length > 0 && (
+                                            <div>
+                                              <h5 className="font-bold text-emerald-700 mb-2 flex items-center gap-2">
+                                                <TrendingUp className="w-4 h-4" />
+                                                الدخل ({dayData.incomes.length})
+                                              </h5>
+                                              <div className="space-y-2">
+                                                {dayData.incomes.map(inc => {
+                                                  const account = accounts.find(a => a.id === inc.accountId);
+                                                  return (
+                                                    <div key={inc.id} className="bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+                                                      <div className="flex justify-between items-start">
+                                                        <div>
+                                                          <p className="font-semibold text-gray-800">{inc.name}</p>
+                                                          <p className="text-xs text-gray-600 mt-1">
+                                                            {inc.category} • {account?.name || 'لا يؤثر على حساب'}
+                                                          </p>
+                                                        </div>
+                                                        <span className="font-bold text-emerald-600">
+                                                          +{inc.amount.toLocaleString()} ج.م
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* المصروفات */}
+                                          {dayData.expenses.length > 0 && (
+                                            <div>
+                                              <h5 className="font-bold text-red-700 mb-2 flex items-center gap-2">
+                                                <TrendingDown className="w-4 h-4" />
+                                                المصروفات ({dayData.expenses.length})
+                                              </h5>
+                                              <div className="space-y-2">
+                                                {dayData.expenses.map(exp => {
+                                                  const account = accounts.find(a => a.id === exp.accountId);
+                                                  return (
+                                                    <div key={exp.id} className="bg-red-50 p-3 rounded-lg border border-red-200">
+                                                      <div className="flex justify-between items-start">
+                                                        <div>
+                                                          <p className="font-semibold text-gray-800">{exp.name}</p>
+                                                          <p className="text-xs text-gray-600 mt-1">
+                                                            {exp.category} • {account?.name || 'لا يؤثر على حساب'}
+                                                          </p>
+                                                        </div>
+                                                        <span className="font-bold text-red-600">
+                                                          -{exp.amount.toLocaleString()} ج.م
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {expandedMonths[row.monthIndex] && row.days.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="p-4 bg-gray-50 text-center text-gray-500">
+                      لا توجد معاملات في هذا الشهر
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
+            
             <tr className="bg-gray-100 font-bold">
+              <td className="p-3"></td>
               <td className="p-3">الإجمالي</td>
               <td className="p-3 text-emerald-600">
                 {yearlyOverview.reduce((s, r) => s + r.income, 0).toLocaleString()} ج.م
