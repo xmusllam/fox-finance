@@ -397,21 +397,10 @@ const filteredIncomes = filterByDate(incomes);
   .sort((a, b) => (a.order || 0) - (b.order || 0));
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-emerald-100 text-lg mb-2">إجمالي الدخل</p>
-            <p className="text-5xl font-bold">{totalIncome.toLocaleString()} ج.م</p>
-            <p className="text-emerald-100 mt-2">عدد المعاملات: {filteredIncomes.length}</p>
-          </div>
-          <TrendingUp className="w-20 h-20 text-emerald-200" />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-gray-800">إضافة دخل جديد</h3>
+  <div className="space-y-6">
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-2xl font-bold text-gray-800">إضافة دخل جديد</h3>
           <button
             onClick={() => setShowCategoryManager(!showCategoryManager)}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200"
@@ -643,6 +632,17 @@ const filteredIncomes = filterByDate(incomes);
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-8 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-emerald-100 text-lg mb-2">إجمالي الدخل</p>
+            <p className="text-3xl md:text-5xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">{totalIncome.toLocaleString()} ج.م</p>
+            <p className="text-emerald-100 mt-2">عدد المعاملات: {filteredIncomes.length}</p>
+          </div>
+          <TrendingUp className="w-20 h-20 text-emerald-200" />
         </div>
       </div>
 
