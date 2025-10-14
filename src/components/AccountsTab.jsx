@@ -427,6 +427,7 @@ const handleAddAccount = async () => {
   
   const totalRegular = regularAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalCredit = creditAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+  const totalDebts = Math.abs(totalCredit);
 
   // Continue in Part 3...
 return (
