@@ -218,8 +218,8 @@ export default function AccountTab({ user, userSettings, updateUserSettings }) {
   const pageOptions = [
     { id: 'dashboard', label: 'الرئيسية', icon: HomeIcon },
     { id: 'income', label: 'الدخل', icon: Plus },
-    { id: 'expenses', label: 'المصروفات', icon: Trash2 },
-    { id: 'accounts', label: 'الحسابات', icon: User },
+    { id: 'expenses', label: 'المصروفات', icon: Minus },
+    { id: 'accounts', label: 'الحسابات', icon: Wallet },
     { id: 'transfers', label: 'التحويلات', icon: ArrowUp }
   ];
   return (
