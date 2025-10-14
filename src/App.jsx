@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import IncomeTab from './components/IncomeTab';
@@ -8,7 +9,7 @@ import ExpensesTab from './components/ExpensesTab';
 import AccountsTab from './components/AccountsTab';
 import AccountTab from './components/AccountTab';
 import TransfersTab from './components/TransfersTab';
-import { Wallet, LogOut, FileText, TrendingUp, TrendingDown, Calendar, User, ArrowRightLeft } from 'lucide-react';
+import { Wallet, Home, TrendingUp, TrendingDown, ArrowRightLeft, User } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -17,6 +18,17 @@ function App() {
   const [dateFilter, setDateFilter] = useState('tomorrow-to-year-end');
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
+  const [userSettings, setUserSettings] = useState({
+    defaultPage: 'dashboard',
+    dateFilters: [
+      { id: 'all', label: 'كل' },
+      { id: 'custom', label: 'مخصص' },
+      { id: 'today', label: 'اليوم' },
+      { id: 'yesterday', label: 'أمس' },
+      { id: 'year-to-today', label: 'من بداية السنة لليوم' },
+      { id: 'tomorrow-to-year-end', label: 'غدًا حتى نهاية السنة' }
+    ]
+  });
 
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -28,12 +40,27 @@ function App() {
   yesterday.setDate(yesterday.getDate() - 1);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        const settingsDoc = await getDoc(doc(db, 'userSettings', currentUser.uid));
+        if (settingsDoc.exists()) {
+          const settings = settingsDoc.data();
+          setUserSettings(settings);
+          setActiveTab(settings.defaultPage || 'dashboard');
+        }
+      }
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
+
+  const updateUserSettings = async (newSettings) => {
+    if (user) {
+      await setDoc(doc(db, 'userSettings', user.uid), newSettings);
+      setUserSettings(newSettings);
+    }
+  };
 
   if (loading) {
     return (
@@ -50,14 +77,10 @@ function App() {
     return <Auth />;
   }
 
-  const filterButtons = [
-    { id: 'all', label: 'كل' },
-    { id: 'custom', label: 'مخصص' },
-    { id: 'today', label: 'اليوم' },
-    { id: 'yesterday', label: 'أمس' },
-    { id: 'year-to-today', label: `من بداية ${currentYear} لليوم` },
-    { id: 'tomorrow-to-year-end', label: `غدًا حتى نهاية ${currentYear}` }
-  ];
+  const filterButtons = userSettings.dateFilters.map(filter => ({
+    ...filter,
+    label: filter.label.replace('السنة', currentYear.toString())
+  }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-24" dir="rtl">
@@ -65,14 +88,23 @@ function App() {
       <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <button 
-  onClick={() => setActiveTab('dashboard')}
-  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
->
-  <Wallet className="w-8 h-8" />
-  <span className="text-xl font-bold hidden md:inline">Fox Finance</span>
-</button>
-          <div className="text-lg font-semibold">
-            مرحباً {user.displayName || user.email?.split('@')[0]}
+            onClick={() => setActiveTab('dashboard')}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
+            <Wallet className="w-8 h-8" />
+            <span className="text-xl font-bold hidden md:inline">Fox Finance</span>
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="text-lg font-semibold">
+              مرحباً {user.displayName || user.email?.split('@')[0]}
+            </div>
+            <button
+              onClick={() => setActiveTab('account')}
+              className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
+              title="حسابي"
+            >
+              <User className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
@@ -81,21 +113,20 @@ function App() {
       <div className="bg-white shadow-md border-b sticky top-0 z-10">
         <div className="container mx-auto px-4 py-2 overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-2 pb-2" style={{ minWidth: 'max-content' }}>
-            <Calendar className="w-5 h-5 text-gray-600 hidden md:inline flex-shrink-0" />
             {filterButtons.map(btn => (
-            <button
-              key={btn.id}
-              onClick={() => setDateFilter(btn.id)}
-              className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all flex-shrink-0 ${
-                dateFilter === btn.id
-                  ? 'bg-emerald-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
-              }`}
-            >
-              {btn.label}
-            </button>
-          ))}
-        </div>
+              <button
+                key={btn.id}
+                onClick={() => setDateFilter(btn.id)}
+                className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all flex-shrink-0 ${
+                  dateFilter === btn.id
+                    ? 'bg-emerald-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
           
           {dateFilter === 'custom' && (
             <div className="flex items-center gap-2 mt-3">
@@ -132,6 +163,7 @@ function App() {
             yesterday={yesterday}
             currentYear={currentYear}
             onNavigate={setActiveTab}
+            userSettings={userSettings}
           />
         )}
         {activeTab === 'income' && (
@@ -161,32 +193,47 @@ function App() {
           />
         )}
         {activeTab === 'accounts' && <AccountsTab userId={user.uid} />}
-        {activeTab === 'account' && <AccountTab user={user} />}
+        {activeTab === 'account' && (
+          <AccountTab 
+            user={user} 
+            userSettings={userSettings}
+            updateUserSettings={updateUserSettings}
+          />
+        )}
         {activeTab === 'transfers' && <TransfersTab userId={user.uid} />}
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-2xl border-t-2 border-gray-200 z-50 h-20">
+      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-2xl border-t-2 border-gray-200 z-50">
         <div className="container mx-auto px-2">
-          <div className="flex justify-around items-center">
+          <div className="flex justify-around items-center relative py-3">
             {[
-              { id: 'dashboard', label: 'الرئيسية', icon: FileText },
-              { id: 'income', label: 'الدخل', icon: TrendingUp },
-              { id: 'expenses', label: 'المصروفات', icon: TrendingDown },
-              { id: 'accounts', label: 'الحسابات', icon: Wallet },
-              { id: 'transfers', label: 'التحويلات', icon: ArrowRightLeft },
-              { id: 'account', label: 'حسابي', icon: User }
+              { id: 'dashboard', label: 'الرئيسية', icon: Home, color: 'emerald' },
+              { id: 'income', label: 'الدخل', icon: TrendingUp, color: 'green', elevated: true, sign: '+' },
+              { id: 'accounts', label: 'الحسابات', icon: Wallet, color: 'emerald' },
+              { id: 'expenses', label: 'المصروفات', icon: TrendingDown, color: 'red', elevated: true, sign: '-' },
+              { id: 'transfers', label: 'التحويلات', icon: ArrowRightLeft, color: 'emerald' }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center gap-1 py-4 px-2 transition-all
+                className={`flex flex-col items-center gap-1 px-2 transition-all relative ${
+                  tab.elevated ? '-mt-6' : 'py-2'
+                } ${
                   activeTab === tab.id 
-                    ? 'text-emerald-600' 
+                    ? `text-${tab.color}-600` 
                     : 'text-gray-500 hover:text-emerald-600'
                 }`}
               >
-                <tab.icon className={`w-6 h-6 ${activeTab === tab.id ? 'scale-110' : ''}`} />
+                {tab.elevated ? (
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg ${
+                    tab.id === 'income' ? 'bg-green-500' : 'bg-red-500'
+                  } ${activeTab === tab.id ? 'scale-110' : ''} transition-transform`}>
+                    <span className="text-white text-3xl font-bold">{tab.sign}</span>
+                  </div>
+                ) : (
+                  <tab.icon className={`w-6 h-6 ${activeTab === tab.id ? 'scale-110' : ''}`} />
+                )}
                 <span className="text-xs font-semibold hidden md:inline">{tab.label}</span>
               </button>
             ))}
