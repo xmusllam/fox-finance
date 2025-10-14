@@ -285,6 +285,15 @@ export default function AccountTab({ user, userSettings, updateUserSettings }) {
                   {/* إضافة فلتر جديد */}
                   <div className="bg-white p-4 rounded-lg border-2 border-blue-300">
                     <h5 className="font-semibold text-gray-800 mb-3">إضافة فلتر جديد</h5>
+                    <div className="bg-blue-50 p-3 rounded-lg mb-4 border border-blue-200">
+  <p className="text-sm text-blue-800 font-medium mb-2">💡 كيفية كتابة معرف الفلتر:</p>
+  <ul className="text-xs text-blue-700 space-y-1 mr-4">
+    <li>• استخدم حروف إنجليزية صغيرة فقط</li>
+    <li>• استخدم الشرطة (-) للفصل بين الكلمات</li>
+    <li>• أمثلة صحيحة: <code className="bg-white px-1 rounded">last-7-days</code>, <code className="bg-white px-1 rounded">this-month</code>, <code className="bg-white px-1 rounded">last-30-days</code></li>
+    <li>• تجنب: المسافات، الأرقام العربية، الحروف الكبيرة</li>
+  </ul>
+</div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <input
                         type="text"
