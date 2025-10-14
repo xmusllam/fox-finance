@@ -699,10 +699,10 @@ return (
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-2xl shadow-lg p-8 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-purple-100 text-lg mb-2">إجمالي الأرصدة</p>
-              <p className="text-5xl font-bold">{totalRegular.toLocaleString()} ج.م</p>
+  <div className="flex items-center justify-between">
+    <div>
+      <p className="text-purple-100 text-lg mb-2">إجمالي الأرصدة</p>
+      <p className="text-3xl md:text-5xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">{totalRegular.toLocaleString()} ج.م</p>
               <p className="text-purple-100 mt-2">عدد الحسابات: {regularAccounts.length}</p>
             </div>
             <Wallet className="w-20 h-20 text-purple-200" />
@@ -710,10 +710,10 @@ return (
         </div>
 
         <div className="bg-gradient-to-r from-red-500 to-orange-600 rounded-2xl shadow-lg p-8 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-red-100 text-lg mb-2">إجمالي الديون</p>
-              <p className="text-5xl font-bold">{Math.abs(totalCredit).toLocaleString()} ج.م</p>
+  <div className="flex items-center justify-between">
+    <div>
+      <p className="text-red-100 text-lg mb-2">إجمالي الديون</p>
+      <p className="text-3xl md:text-5xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">{Math.abs(totalDebts).toLocaleString()} ج.م</p>
               <p className="text-red-100 mt-2">عدد البطاقات: {creditAccounts.length}</p>
             </div>
             <CreditCard className="w-20 h-20 text-red-200" />
