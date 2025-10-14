@@ -83,7 +83,7 @@ function App() {
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-24 pt-[140px] md:pt-26" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-24 pt-[140px] md:pt-260" dir="rtl">
       {/* Header - Fixed with safe area */}
       <div className="fixed top-0 left-0 right-0 z-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
