@@ -27,6 +27,26 @@ extension Color {
     static let foxTextLight = Color(red: 156/255, green: 163/255, blue: 175/255)  // #9ca3af
 }
 
+// MARK: - ShapeStyle Compatibility
+extension ShapeStyle where Self == Color {
+    static var foxGreen: Color { Color.foxGreen }
+    static var foxGreenDark: Color { Color.foxGreenDark }
+    static var foxGreenLight: Color { Color.foxGreenLight }
+    static var foxBg: Color { Color.foxBg }
+    static var foxCard: Color { Color.foxCard }
+    static var foxDarkBg: Color { Color.foxDarkBg }
+    static var foxRed: Color { Color.foxRed }
+    static var foxOrange: Color { Color.foxOrange }
+    static var foxBlue: Color { Color.foxBlue }
+    static var foxIndigo: Color { Color.foxIndigo }
+    static var foxPurple: Color { Color.foxPurple }
+    static var foxTeal: Color { Color.foxTeal }
+    static var foxAmber: Color { Color.foxAmber }
+    static var foxTextPrimary: Color { Color.foxTextPrimary }
+    static var foxTextSecondary: Color { Color.foxTextSecondary }
+    static var foxTextLight: Color { Color.foxTextLight }
+}
+
 // MARK: - Gradient Presets
 extension LinearGradient {
     static let foxPrimary = LinearGradient(
