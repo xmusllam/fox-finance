@@ -127,11 +127,10 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         await updateDoc(doc(db, 'accounts', transaction.accountId), { balance: (account.balance || 0) + transaction.amount });
         await updateDoc(doc(db, 'incomes', transaction.id), { applied: true });
       } else {
-        if (account.isCredit) {
-          if (transaction.isInstallmentPayment) {
-            // دفع قسط: يقلّل الدين
-            await updateDoc(doc(db, 'accounts', transaction.accountId), { balance: (account.balance || 0) + transaction.amount });
-          } else {
+        // أقساط الكريدت كارد: تُسجَّل فقط كـ applied دون تغيير الرصيد
+        // لأن الدين الكلي (أصل + فائدة) اتخصم كاملاً عند التقسيط
+        if (!transaction.isInstallmentPayment) {
+          if (account.isCredit) {
             const now = new Date();
             const expDate = new Date(transaction.date + 'T00:00:00');
             const curMonth = now.getMonth(); const curYear = now.getFullYear();
@@ -142,9 +141,9 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
             else if (expYear < curYear || (expYear === curYear && expMonth < curMonth)) { lastMonthDebt += transaction.amount; }
             else { currentMonthDebt += transaction.amount; }
             await updateDoc(doc(db, 'accounts', transaction.accountId), { balance: (account.balance || 0) - transaction.amount, lastMonthDebt, currentMonthDebt });
+          } else {
+            await updateDoc(doc(db, 'accounts', transaction.accountId), { balance: (account.balance || 0) - transaction.amount });
           }
-        } else {
-          await updateDoc(doc(db, 'accounts', transaction.accountId), { balance: (account.balance || 0) - transaction.amount });
         }
         await updateDoc(doc(db, 'expenses', transaction.id), { applied: true });
       }
@@ -175,28 +174,27 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
           if (exp.applied !== false || !exp.accountId || !exp.affectsAccount) continue;
           const account = accounts.find(a => a.id === exp.accountId);
           if (!account) continue;
+          // أقساط الكريدت كارد: تُسجَّل فقط كـ applied دون تغيير الرصيد
+          if (exp.isInstallmentPayment) {
+            await updateDoc(doc(db, 'expenses', exp.id), { applied: true });
+            continue;
+          }
           const curBal = getBalance(exp.accountId);
           if (account.isCredit) {
-            if (exp.isInstallmentPayment) {
-              // دفع قسط: يقلّل الدين
-              balanceAdj[exp.accountId] = (balanceAdj[exp.accountId] || 0) + exp.amount;
-              await updateDoc(doc(db, 'accounts', exp.accountId), { balance: curBal + exp.amount });
-            } else {
-              if (!creditAdj[exp.accountId]) {
-                creditAdj[exp.accountId] = { lastMonthDebt: account.lastMonthDebt || 0, currentMonthDebt: account.currentMonthDebt || 0 };
-              }
-              const now = new Date();
-              const expDate = new Date(exp.date + 'T00:00:00');
-              const curMonth = now.getMonth(); const curYear = now.getFullYear();
-              const expMonth = expDate.getMonth(); const expYear = expDate.getFullYear();
-              let { lastMonthDebt, currentMonthDebt } = creditAdj[exp.accountId];
-              if (expMonth === curMonth && expYear === curYear) { currentMonthDebt += exp.amount; }
-              else if (expYear < curYear || (expYear === curYear && expMonth < curMonth)) { lastMonthDebt += exp.amount; }
-              else { currentMonthDebt += exp.amount; }
-              creditAdj[exp.accountId] = { lastMonthDebt, currentMonthDebt };
-              balanceAdj[exp.accountId] = (balanceAdj[exp.accountId] || 0) - exp.amount;
-              await updateDoc(doc(db, 'accounts', exp.accountId), { balance: curBal - exp.amount, lastMonthDebt, currentMonthDebt });
+            if (!creditAdj[exp.accountId]) {
+              creditAdj[exp.accountId] = { lastMonthDebt: account.lastMonthDebt || 0, currentMonthDebt: account.currentMonthDebt || 0 };
             }
+            const now = new Date();
+            const expDate = new Date(exp.date + 'T00:00:00');
+            const curMonth = now.getMonth(); const curYear = now.getFullYear();
+            const expMonth = expDate.getMonth(); const expYear = expDate.getFullYear();
+            let { lastMonthDebt, currentMonthDebt } = creditAdj[exp.accountId];
+            if (expMonth === curMonth && expYear === curYear) { currentMonthDebt += exp.amount; }
+            else if (expYear < curYear || (expYear === curYear && expMonth < curMonth)) { lastMonthDebt += exp.amount; }
+            else { currentMonthDebt += exp.amount; }
+            creditAdj[exp.accountId] = { lastMonthDebt, currentMonthDebt };
+            balanceAdj[exp.accountId] = (balanceAdj[exp.accountId] || 0) - exp.amount;
+            await updateDoc(doc(db, 'accounts', exp.accountId), { balance: curBal - exp.amount, lastMonthDebt, currentMonthDebt });
           } else {
             balanceAdj[exp.accountId] = (balanceAdj[exp.accountId] || 0) - exp.amount;
             await updateDoc(doc(db, 'accounts', exp.accountId), { balance: curBal - exp.amount });
