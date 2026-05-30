@@ -187,11 +187,27 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
   };
 
   const handleDeleteExpense = async (expense) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المصروف؟')) return;
-    if (expense.affectsAccount && expense.accountId && expense.applied !== false) {
+    const isParentInstallment = expense.isInstallment;
+    const confirmMsg = isParentInstallment
+      ? 'هل أنت متأكد من حذف هذا المصروف؟\nسيتم حذف جميع أقساطه المرتبطة به أيضاً.'
+      : 'هل أنت متأكد من حذف هذا المصروف؟';
+    if (!confirm(confirmMsg)) return;
+
+    // حذف الأقساط الفرعية المرتبطة (Bug Fix: cascade delete)
+    if (isParentInstallment) {
+      const childSnap = await getDocs(query(
+        collection(db, 'expenses'),
+        where('parentExpenseId', '==', expense.id)
+      ));
+      await Promise.all(childSnap.docs.map(d => deleteDoc(doc(db, 'expenses', d.id))));
+    }
+
+    // عكس تأثير المعاملة على الحساب (فقط لو كانت مطبقة)
+    // أقساط الكريدت كارد لا تغير الرصيد عند التطبيق فلا نعكسها
+    if (expense.affectsAccount && expense.accountId && expense.applied !== false && !expense.isInstallmentPayment) {
       const account = accounts.find(a => a.id === expense.accountId);
       if (account) {
-        if (account.isCredit && !expense.isInstallmentPayment) {
+        if (account.isCredit) {
           const now = new Date(); const expenseDate = new Date(expense.date + 'T00:00:00');
           const currentMonth = now.getMonth(); const currentYear = now.getFullYear();
           const expenseMonth = expenseDate.getMonth(); const expenseYear = expenseDate.getFullYear();
@@ -200,14 +216,12 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
           else if (expenseYear<currentYear||(expenseYear===currentYear&&expenseMonth<currentMonth)) { lastMonthDebt=Math.max(0,lastMonthDebt-expense.amount); }
           else { currentMonthDebt=Math.max(0,currentMonthDebt-expense.amount); }
           await updateDoc(doc(db,'accounts',expense.accountId), { balance:(account.balance||0)+expense.amount, lastMonthDebt, currentMonthDebt });
-        } else if (account.isCredit && expense.isInstallmentPayment) {
-          // إلغاء دفع قسط: يزيد الدين مجدداً
-          await updateDoc(doc(db,'accounts',expense.accountId), { balance:(account.balance||0)-expense.amount });
         } else {
           await updateDoc(doc(db,'accounts',expense.accountId), { balance:(account.balance||0)+expense.amount });
         }
       }
     }
+
     await deleteDoc(doc(db,'expenses',expense.id));
   };
 
