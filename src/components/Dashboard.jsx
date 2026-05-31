@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { TrendingUp, TrendingDown, Wallet, DollarSign, Briefcase, CreditCard, Calendar, ChevronDown, ChevronUp, ChevronRight, ChevronLeft, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Briefcase, CreditCard, Calendar, ChevronDown, ChevronUp, ChevronRight, ChevronLeft, X, Trash2 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard({ userId, dateFilter, customDateFrom, customDateTo, yearStart, yearEnd, today, tomorrow, yesterday, currentYear, onNavigate, userSettings }) {
@@ -203,6 +203,12 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
         }
       }
     } finally { setApplyingMonthIndex(null); }
+  };
+
+  // ---- حذف قسط فردي ----
+  const handleDeleteSingleInstallment = async (installment) => {
+    if (!confirm(`هل أنت متأكد من حذف هذا القسط؟\n"${installment.name}"\n${installment.amount.toLocaleString()} ج.م\n\nلن يتأثر رصيد الحساب.`)) return;
+    await deleteDoc(doc(db, 'expenses', installment.id));
   };
 
   const filterByDate = (items) => {
@@ -430,6 +436,15 @@ export default function Dashboard({ userId, dateFilter, customDateFrom, customDa
                                                             className="text-xs bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg font-bold whitespace-nowrap transition-colors"
                                                           >
                                                             تقسيط
+                                                          </button>
+                                                        )}
+                                                        {exp.isInstallmentPayment && (
+                                                          <button
+                                                            onClick={e=>{e.stopPropagation();handleDeleteSingleInstallment(exp);}}
+                                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                                                            title="حذف هذا القسط"
+                                                          >
+                                                            <Trash2 className="w-4 h-4"/>
                                                           </button>
                                                         )}
                                                       </div>
