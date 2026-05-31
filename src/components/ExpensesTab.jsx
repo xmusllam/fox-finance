@@ -188,12 +188,19 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
 
   const handleDeleteExpense = async (expense) => {
     const isParentInstallment = expense.isInstallment;
-    const confirmMsg = isParentInstallment
-      ? 'هل أنت متأكد من حذف هذا المصروف؟\nسيتم حذف جميع أقساطه المرتبطة به أيضاً.'
-      : 'هل أنت متأكد من حذف هذا المصروف؟';
+    const isSingleInstallment = expense.isInstallmentPayment;
+
+    let confirmMsg;
+    if (isParentInstallment) {
+      confirmMsg = `هل أنت متأكد من حذف هذا المصروف؟\nسيتم حذف جميع أقساطه المرتبطة (${expense.installmentMonths} قسط) أيضاً.`;
+    } else if (isSingleInstallment) {
+      confirmMsg = `هل أنت متأكد من حذف هذا القسط فقط؟\n"${expense.name}"\n${expense.amount.toLocaleString()} ج.م\n\nلن يتأثر رصيد الحساب.`;
+    } else {
+      confirmMsg = 'هل أنت متأكد من حذف هذا المصروف؟';
+    }
     if (!confirm(confirmMsg)) return;
 
-    // حذف الأقساط الفرعية المرتبطة (Bug Fix: cascade delete)
+    // حذف الأقساط الفرعية المرتبطة (cascade delete)
     if (isParentInstallment) {
       const childSnap = await getDocs(query(
         collection(db, 'expenses'),
@@ -204,7 +211,7 @@ export default function ExpensesTab({ userId, dateFilter, customDateFrom, custom
 
     // عكس تأثير المعاملة على الحساب (فقط لو كانت مطبقة)
     // أقساط الكريدت كارد لا تغير الرصيد عند التطبيق فلا نعكسها
-    if (expense.affectsAccount && expense.accountId && expense.applied !== false && !expense.isInstallmentPayment) {
+    if (expense.affectsAccount && expense.accountId && expense.applied !== false && !isSingleInstallment) {
       const account = accounts.find(a => a.id === expense.accountId);
       if (account) {
         if (account.isCredit) {
